@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Plus,
   Terminal,
@@ -27,6 +27,19 @@ const ICONS: Record<Protocol, React.ComponentType<{ size?: number; color?: strin
   serial: Cable,
 };
 
+const WIDTH_KEY = "dshh.sidebarWidth";
+const MIN_WIDTH = 200;
+const MAX_WIDTH = 460;
+const DEFAULT_WIDTH = 256;
+
+const clampWidth = (w: number) => Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, w));
+
+function connectionDetail(c: Connection): string {
+  return c.protocol === "serial"
+    ? `${c.serialPort} · ${c.baudRate} baud`
+    : `${c.username ? c.username + "@" : ""}${c.host}:${c.port}`;
+}
+
 export function Sidebar({
   onNew,
   onEdit,
@@ -41,6 +54,33 @@ export function Sidebar({
   const removeConnection = useStore((s) => s.removeConnection);
   const duplicateConnection = useStore((s) => s.duplicateConnection);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+
+  const asideRef = useRef<HTMLElement>(null);
+  const [width, setWidth] = useState<number>(() => {
+    const saved = Number(localStorage.getItem(WIDTH_KEY));
+    return saved ? clampWidth(saved) : DEFAULT_WIDTH;
+  });
+  const [resizing, setResizing] = useState(false);
+
+  // Drag-to-resize the panel. Width is derived from the pointer's x relative
+  // to the panel's left edge, so it tracks the cursor exactly.
+  const startResize = useCallback((e: React.PointerEvent) => {
+    e.preventDefault();
+    const left = asideRef.current?.getBoundingClientRect().left ?? 0;
+    setResizing(true);
+    const onMove = (ev: PointerEvent) => setWidth(clampWidth(ev.clientX - left));
+    const onUp = () => {
+      setResizing(false);
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem(WIDTH_KEY, String(width));
+  }, [width]);
 
   const { names, map } = useMemo(() => {
     const map = new Map<string, Connection[]>();
@@ -70,7 +110,13 @@ export function Sidebar({
     });
 
   return (
-    <aside className="flex w-64 shrink-0 flex-col border-r border-edge bg-bg-panel">
+    <aside
+      ref={asideRef}
+      style={{ width }}
+      className={`relative flex shrink-0 flex-col border-r border-edge bg-bg-panel ${
+        resizing ? "select-none" : ""
+      }`}
+    >
       <div className="drag-region flex items-center justify-between px-3 py-3">
         <div className="flex items-center gap-2.5">
           <div className="flex h-6 w-6 items-center justify-center rounded-md border border-accent/30 bg-accent/10 font-mono text-[11px] font-semibold leading-none text-accent">
@@ -120,7 +166,7 @@ export function Sidebar({
                     <div
                       key={c.id}
                       onDoubleClick={() => openSession(c.id, c.name)}
-                      title="Double-click to open a session"
+                      title={`${c.name}\n${connectionDetail(c)}\n\nDouble-click to open`}
                       className="group flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 transition hover:bg-bg-hover"
                     >
                       <div
@@ -132,9 +178,7 @@ export function Sidebar({
                       <div className="min-w-0 flex-1">
                         <div className="truncate text-[13px] text-ink-hi">{c.name}</div>
                         <div className="truncate font-mono text-[10.5px] text-ink-dim">
-                          {c.protocol === "serial"
-                            ? `${c.serialPort} · ${c.baudRate} baud`
-                            : `${c.username ? c.username + "@" : ""}${c.host}:${c.port}`}
+                          {connectionDetail(c)}
                         </div>
                       </div>
                       <div className="flex items-center gap-0.5 opacity-0 transition group-hover:opacity-100">
@@ -196,6 +240,21 @@ export function Sidebar({
         <button onClick={onSettings} title="Settings" className="tb-btn">
           <SettingsIcon size={15} />
         </button>
+      </div>
+
+      {/* Drag handle: sits over the right border, widens the hit area without
+          shifting layout. Turns accent-colored while hovered or dragging. */}
+      <div
+        onPointerDown={startResize}
+        onDoubleClick={() => setWidth(DEFAULT_WIDTH)}
+        title="Drag to resize · double-click to reset"
+        className="group absolute inset-y-0 -right-1 z-20 w-2 cursor-col-resize"
+      >
+        <div
+          className={`ml-auto h-full w-px transition-colors group-hover:bg-accent ${
+            resizing ? "bg-accent" : "bg-transparent"
+          }`}
+        />
       </div>
     </aside>
   );
