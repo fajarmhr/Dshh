@@ -27,3 +27,11 @@ export function timestamp(): string {
 export function sanitizeFilename(s: string): string {
   return s.replace(/[^a-zA-Z0-9._-]+/g, "_").slice(0, 60) || "session";
 }
+
+/** Short local date-time for file listings, e.g. "2026-07-03 14:22". */
+export function formatDate(epochSeconds: number | null): string {
+  if (!epochSeconds) return "—";
+  const d = new Date(epochSeconds * 1000);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}

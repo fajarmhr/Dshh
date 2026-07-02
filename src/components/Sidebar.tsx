@@ -71,27 +71,28 @@ export function Sidebar({
 
   return (
     <aside className="flex w-64 shrink-0 flex-col border-r border-edge bg-bg-panel">
-      <div className="drag-region flex items-center justify-between px-4 py-3">
-        <div className="flex items-center gap-2">
-          <div className="h-3 w-3 rounded-full bg-accent" />
-          <span className="text-sm font-semibold tracking-wide">Dshh</span>
+      <div className="drag-region flex items-center justify-between px-3 py-3">
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-6 w-6 items-center justify-center rounded-md border border-accent/30 bg-accent/10 font-mono text-[11px] font-semibold leading-none text-accent">
+            &gt;_
+          </div>
+          <span className="font-mono text-[13px] font-semibold tracking-[0.08em] text-ink-hi">
+            dshh
+          </span>
         </div>
-        <button
-          onClick={onNew}
-          title="New connection"
-          className="no-drag rounded-md p-1.5 text-[#9aa7b6] transition hover:bg-bg-hover hover:text-white"
-        >
+        <button onClick={onNew} title="New connection" className="no-drag tb-btn">
           <Plus size={16} />
         </button>
       </div>
 
       <div className="flex-1 overflow-y-auto px-2 pb-4">
         {connections.length === 0 && (
-          <div className="mt-10 px-3 text-center text-xs leading-relaxed text-[#5f6b7a]">
-            No connections yet.
-            <br />
-            Hit <span className="text-accent">+</span> to add SSH, SFTP, FTP or a
-            serial port.
+          <div className="mx-1 mt-8 rounded-lg border border-dashed border-edge-bright px-4 py-6 font-mono text-[11px] leading-relaxed text-ink-dim">
+            <div className="text-ink-mid">$ no connections</div>
+            <div className="mt-2">
+              hit <span className="text-accent">+</span> to add ssh, sftp, ftp or a
+              serial port
+            </div>
           </div>
         )}
 
@@ -102,11 +103,11 @@ export function Sidebar({
             <div key={g} className="mt-3">
               <button
                 onClick={() => toggle(g)}
-                className="flex w-full items-center gap-1 rounded px-1.5 py-1 text-[10px] font-semibold uppercase tracking-widest text-[#5f6b7a] transition hover:text-[#9aa7b6]"
+                className="micro-label flex w-full items-center gap-1 rounded px-1.5 py-1 transition hover:text-ink-mid"
               >
                 {isCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
                 <span className="truncate">{g}</span>
-                <span className="ml-auto rounded bg-bg-elev px-1.5 text-[9px] text-[#5f6b7a]">
+                <span className="ml-auto rounded bg-bg-elev px-1.5 py-px font-mono text-[9px] text-ink-dim">
                   {items.length}
                 </span>
               </button>
@@ -114,28 +115,47 @@ export function Sidebar({
               {!isCollapsed &&
                 items.map((c) => {
                   const Icon = ICONS[c.protocol];
+                  const color = PROTOCOL_COLORS[c.protocol];
                   return (
                     <div
                       key={c.id}
                       onDoubleClick={() => openSession(c.id, c.name)}
-                      className="group flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition hover:bg-bg-hover"
+                      title="Double-click to open a session"
+                      className="group flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 transition hover:bg-bg-hover"
                     >
-                      <Icon size={15} color={PROTOCOL_COLORS[c.protocol]} />
+                      <div
+                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md"
+                        style={{ backgroundColor: `${color}14` }}
+                      >
+                        <Icon size={14} color={color} />
+                      </div>
                       <div className="min-w-0 flex-1">
-                        <div className="truncate">{c.name}</div>
-                        <div className="truncate text-[11px] text-[#5f6b7a]">
+                        <div className="truncate text-[13px] text-ink-hi">{c.name}</div>
+                        <div className="truncate font-mono text-[10.5px] text-ink-dim">
                           {c.protocol === "serial"
                             ? `${c.serialPort} · ${c.baudRate} baud`
                             : `${c.username ? c.username + "@" : ""}${c.host}:${c.port}`}
                         </div>
                       </div>
                       <div className="flex items-center gap-0.5 opacity-0 transition group-hover:opacity-100">
+                        {c.protocol === "ssh" && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openSession(c.id, c.name, "sftp");
+                            }}
+                            className="rounded p-1 text-ink-dim hover:bg-bg-elev hover:text-proto-sftp"
+                            title="Browse files (SFTP)"
+                          >
+                            <FolderTree size={13} />
+                          </button>
+                        )}
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
                             onEdit(c);
                           }}
-                          className="rounded p-1 text-[#7c8896] hover:bg-bg-elev hover:text-white"
+                          className="rounded p-1 text-ink-dim hover:bg-bg-elev hover:text-ink-hi"
                           title="Edit"
                         >
                           <Pencil size={13} />
@@ -145,7 +165,7 @@ export function Sidebar({
                             e.stopPropagation();
                             duplicateConnection(c.id);
                           }}
-                          className="rounded p-1 text-[#7c8896] hover:bg-bg-elev hover:text-white"
+                          className="rounded p-1 text-ink-dim hover:bg-bg-elev hover:text-ink-hi"
                           title="Duplicate"
                         >
                           <Copy size={13} />
@@ -155,7 +175,7 @@ export function Sidebar({
                             e.stopPropagation();
                             if (confirm(`Delete "${c.name}"?`)) removeConnection(c.id);
                           }}
-                          className="rounded p-1 text-[#7c8896] hover:bg-bg-elev hover:text-red-400"
+                          className="rounded p-1 text-ink-dim hover:bg-bg-elev hover:text-err"
                           title="Delete"
                         >
                           <Trash2 size={13} />
@@ -170,12 +190,10 @@ export function Sidebar({
       </div>
 
       <div className="flex items-center justify-between border-t border-edge px-3 py-2">
-        <span className="text-[10px] text-[#5f6b7a]">In-process · no ssh.exe</span>
-        <button
-          onClick={onSettings}
-          title="Settings"
-          className="rounded-md p-1.5 text-[#9aa7b6] transition hover:bg-bg-hover hover:text-white"
-        >
+        <span className="font-mono text-[9.5px] tracking-wide text-ink-dim">
+          in-process · no ssh.exe
+        </span>
+        <button onClick={onSettings} title="Settings" className="tb-btn">
           <SettingsIcon size={15} />
         </button>
       </div>

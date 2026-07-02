@@ -52,7 +52,13 @@ pub async fn connect_and_auth(conn: &Connection) -> Result<Handle<ClientHandler>
     let port = conn.port.unwrap_or(22);
     let user = conn.username.clone().unwrap_or_default();
 
-    let config = Arc::new(client::Config::default());
+    let config = Arc::new(client::Config {
+        // Protocol-level keepalive so idle sessions survive NAT/firewall
+        // timeouts and dead peers are detected instead of hanging forever.
+        keepalive_interval: Some(std::time::Duration::from_secs(20)),
+        keepalive_max: 3,
+        ..client::Config::default()
+    });
     let connect_fut = client::connect(config, (host.as_str(), port), ClientHandler);
     let mut handle = tokio::time::timeout(std::time::Duration::from_secs(15), connect_fut)
         .await
@@ -96,6 +102,7 @@ pub async fn connect_and_auth(conn: &Connection) -> Result<Handle<ClientHandler>
 pub async fn ssh_connect(
     conn: Connection,
     on_data: Channel<Vec<u8>>,
+    on_closed: Channel<String>,
     state: State<'_, AppState>,
 ) -> Result<String, String> {
     let handle = connect_and_auth(&conn).await?;
@@ -151,6 +158,9 @@ pub async fn ssh_connect(
                 }
             }
         }
+        // Tell the frontend the shell ended (remote hangup, network drop,
+        // or a local close). The UI decides whether to offer a reconnect.
+        let _ = on_closed.send("closed".into());
     });
 
     state

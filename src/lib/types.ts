@@ -2,6 +2,14 @@ export type Protocol = "ssh" | "sftp" | "ftp" | "serial";
 
 export type AuthMethod = "password" | "key" | "agent";
 
+/** A saved local port forward (`ssh -L`) attached to a connection. */
+export interface TunnelDef {
+  id: string;
+  localPort: number;
+  remoteHost: string;
+  remotePort: number;
+}
+
 export interface Connection {
   id: string;
   name: string;
@@ -21,6 +29,8 @@ export interface Connection {
   serialPort?: string;
   baudRate?: number;
   color?: string;
+  // SSH extras
+  tunnels?: TunnelDef[];
 }
 
 export type SessionStatus = "connecting" | "connected" | "error" | "closed";
@@ -28,6 +38,7 @@ export type SessionStatus = "connecting" | "connected" | "error" | "closed";
 export interface Session {
   id: string;
   connectionId: string;
+  /** May differ from the connection's protocol, e.g. an SFTP view opened from an SSH session. */
   protocol: Protocol;
   title: string;
   status: SessionStatus;
@@ -40,6 +51,22 @@ export interface RemoteFile {
   isDir: boolean;
   size: number;
   modified: number | null; // epoch seconds
+}
+
+/** One-click command snippet sent to the active terminal (XShell "quick command"). */
+export interface QuickCommand {
+  id: string;
+  label: string;
+  command: string;
+}
+
+export type HighlightColor = "red" | "yellow" | "green" | "blue" | "magenta" | "cyan";
+
+/** Case-insensitive keyword colorized in terminal output (XShell "highlight set"). */
+export interface HighlightRule {
+  id: string;
+  pattern: string;
+  color: HighlightColor;
 }
 
 export const DEFAULT_PORTS: Record<Protocol, number> = {
@@ -58,9 +85,9 @@ export const PROTOCOL_LABELS: Record<Protocol, string> = {
 
 export const PROTOCOL_COLORS: Record<Protocol, string> = {
   ssh: "#5b8cff",
-  sftp: "#37c6a4",
-  ftp: "#f0a54a",
-  serial: "#c07cff",
+  sftp: "#3ecf8e",
+  ftp: "#e8a54c",
+  serial: "#b78af7",
 };
 
 export const UNGROUPED = "Ungrouped";
