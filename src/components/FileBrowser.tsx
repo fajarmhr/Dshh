@@ -23,7 +23,7 @@ import {
   ftpDisconnect,
 } from "../lib/api";
 import type { Connection, RemoteFile, Session } from "../lib/types";
-import { formatBytes } from "../lib/utils";
+import { formatBytes, formatDate } from "../lib/utils";
 
 export function FileBrowser({
   session,
@@ -102,7 +102,7 @@ export function FileBrowser({
     const local = await saveDialog({ defaultPath: f.name });
     if (!local) return;
     setBusy(true);
-    setMsg(`Downloading ${f.name}...`);
+    setMsg(`Downloading ${f.name}…`);
     try {
       isSftp
         ? await sftpDownload(backendId, f.path, local)
@@ -122,7 +122,7 @@ export function FileBrowser({
     const name = picked.split(/[\/]/).pop()!;
     const remote = (cwd.endsWith("/") ? cwd : cwd + "/") + name;
     setBusy(true);
-    setMsg(`Uploading ${name}...`);
+    setMsg(`Uploading ${name}…`);
     try {
       isSftp
         ? await sftpUpload(backendId, picked, remote)
@@ -138,8 +138,8 @@ export function FileBrowser({
 
   return (
     <div className="flex h-full flex-col bg-bg-base">
-      <div className="flex items-center gap-1 border-b border-edge bg-bg-panel px-2 py-1.5">
-        <button onClick={goUp} className="tb-btn" title="Up">
+      <div className="flex h-9 shrink-0 items-center gap-1 border-b border-edge bg-bg-panel px-2">
+        <button onClick={goUp} className="tb-btn" title="Up one directory">
           <ArrowUp size={15} />
         </button>
         <button
@@ -152,60 +152,74 @@ export function FileBrowser({
         <button onClick={upload} className="tb-btn" title="Upload file">
           <Upload size={15} />
         </button>
-        <div className="mx-2 flex min-w-0 flex-1 items-center gap-1.5 rounded bg-bg-base px-2 py-1 text-xs text-[#9aa7b6]">
-          <HardDrive size={12} />
-          <span className="truncate font-mono">{cwd}</span>
+        <div className="mx-2 flex h-6 min-w-0 flex-1 items-center gap-1.5 rounded-md border border-edge bg-bg-inset px-2 text-ink-mid">
+          <HardDrive size={11} className="shrink-0 text-ink-dim" />
+          <span className="truncate font-mono text-[11px]">{cwd}</span>
         </div>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <table className="w-full text-sm">
-          <thead className="sticky top-0 bg-bg-panel text-[11px] uppercase tracking-wide text-[#5f6b7a]">
-            <tr>
-              <th className="px-3 py-1.5 text-left font-medium">Name</th>
-              <th className="px-3 py-1.5 text-right font-medium">Size</th>
-              <th className="w-10"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {files.map((f) => (
-              <tr
-                key={f.path}
-                onDoubleClick={() => enter(f)}
-                className="group cursor-default border-b border-edge/40 hover:bg-bg-hover"
-              >
-                <td className="px-3 py-1.5">
-                  <div className="flex items-center gap-2">
-                    {f.isDir ? (
-                      <Folder size={15} color="#f0a54a" />
-                    ) : (
-                      <FileIcon size={15} color="#7c8896" />
-                    )}
-                    <span className="truncate">{f.name}</span>
-                  </div>
-                </td>
-                <td className="px-3 py-1.5 text-right font-mono text-xs text-[#7c8896]">
-                  {f.isDir ? "—" : formatBytes(f.size)}
-                </td>
-                <td className="px-2">
-                  {!f.isDir && (
-                    <button
-                      onClick={() => download(f)}
-                      className="rounded p-1 text-[#7c8896] opacity-0 hover:bg-bg-elev hover:text-white group-hover:opacity-100"
-                      title="Download"
-                    >
-                      <Download size={14} />
-                    </button>
-                  )}
-                </td>
+        {files.length === 0 && !busy ? (
+          <div className="flex h-full items-center justify-center">
+            <span className="font-mono text-[11px] text-ink-dim">
+              {msg || "empty directory"}
+            </span>
+          </div>
+        ) : (
+          <table className={`w-full text-[13px] ${busy ? "opacity-60" : ""}`}>
+            <thead className="sticky top-0 bg-bg-panel">
+              <tr className="micro-label">
+                <th className="px-3 py-2 text-left font-medium">name</th>
+                <th className="px-3 py-2 text-right font-medium">size</th>
+                <th className="px-3 py-2 text-right font-medium">modified</th>
+                <th className="w-10"></th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {files.map((f) => (
+                <tr
+                  key={f.path}
+                  onDoubleClick={() => enter(f)}
+                  className="group cursor-default border-b border-edge/40 transition hover:bg-bg-hover"
+                >
+                  <td className="px-3 py-1.5">
+                    <div className="flex items-center gap-2.5">
+                      {f.isDir ? (
+                        <Folder size={15} className="shrink-0 text-warn" />
+                      ) : (
+                        <FileIcon size={15} className="shrink-0 text-ink-dim" />
+                      )}
+                      <span className="truncate text-ink-hi">{f.name}</span>
+                    </div>
+                  </td>
+                  <td className="px-3 py-1.5 text-right font-mono text-[11px] text-ink-mid">
+                    {f.isDir ? "—" : formatBytes(f.size)}
+                  </td>
+                  <td className="px-3 py-1.5 text-right font-mono text-[11px] text-ink-dim">
+                    {formatDate(f.modified)}
+                  </td>
+                  <td className="px-2">
+                    {!f.isDir && (
+                      <button
+                        onClick={() => download(f)}
+                        className="rounded p-1 text-ink-dim opacity-0 transition hover:bg-bg-elev hover:text-ink-hi group-hover:opacity-100"
+                        title="Download"
+                      >
+                        <Download size={14} />
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
 
-      <div className="border-t border-edge bg-bg-panel px-3 py-1 text-[11px] text-[#5f6b7a]">
-        {msg || `${files.length} items`}
+      <div className="flex h-7 shrink-0 items-center border-t border-edge bg-bg-panel px-3">
+        <span className="truncate font-mono text-[10.5px] text-ink-dim">
+          {msg || `${files.length} items`}
+        </span>
       </div>
     </div>
   );

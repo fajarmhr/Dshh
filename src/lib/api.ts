@@ -18,8 +18,18 @@ function byteChannel(onData: ByteHandler): Channel<number[]> {
 }
 
 // ---- SSH (interactive shell) ----
-export async function sshConnect(conn: Connection, onData: ByteHandler): Promise<string> {
-  return invoke<string>("ssh_connect", { conn, onData: byteChannel(onData) });
+export async function sshConnect(
+  conn: Connection,
+  onData: ByteHandler,
+  onClosed: (reason: string) => void
+): Promise<string> {
+  const closed = new Channel<string>();
+  closed.onmessage = onClosed;
+  return invoke<string>("ssh_connect", {
+    conn,
+    onData: byteChannel(onData),
+    onClosed: closed,
+  });
 }
 export const sshWrite = (id: string, data: string) => invoke("ssh_write", { id, data });
 export const sshResize = (id: string, cols: number, rows: number) =>
@@ -54,8 +64,19 @@ export const ftpUpload = (id: string, local: string, remote: string) =>
   invoke("ftp_upload", { id, local, remote });
 export const ftpDisconnect = (id: string) => invoke("ftp_disconnect", { id });
 
-// ---- Logging ----
+// ---- Port forwarding (ssh -L) ----
+export const tunnelStart = (
+  conn: Connection,
+  localPort: number,
+  remoteHost: string,
+  remotePort: number
+) => invoke<string>("tunnel_start", { conn, localPort, remoteHost, remotePort });
+export const tunnelStop = (id: string) => invoke("tunnel_stop", { id });
+
+// ---- Logging / local files ----
 export const logStart = (id: string, path: string) => invoke("log_start", { id, path });
 export const logStop = (id: string) => invoke("log_stop", { id });
 export const saveTextFile = (path: string, contents: string) =>
   invoke("save_text_file", { path, contents });
+export const readTextFile = (path: string) =>
+  invoke<string>("read_text_file", { path });
