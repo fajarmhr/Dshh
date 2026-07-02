@@ -53,8 +53,10 @@ pub async fn connect_and_auth(conn: &Connection) -> Result<Handle<ClientHandler>
     let user = conn.username.clone().unwrap_or_default();
 
     let config = Arc::new(client::Config::default());
-    let mut handle = client::connect(config, (host.as_str(), port), ClientHandler)
+    let connect_fut = client::connect(config, (host.as_str(), port), ClientHandler);
+    let mut handle = tokio::time::timeout(std::time::Duration::from_secs(15), connect_fut)
         .await
+        .map_err(|_| format!("Connection to {host}:{port} timed out"))?
         .map_err(|e| format!("Connect failed: {e}"))?;
 
     let method = conn.auth_method.clone().unwrap_or_else(|| "password".into());
