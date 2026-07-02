@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { X, RefreshCw } from "lucide-react";
 import { useStore } from "../store";
 import { serialListPorts } from "../lib/api";
@@ -23,10 +23,13 @@ export function ConnectionModal({
 }) {
   const addConnection = useStore((s) => s.addConnection);
   const updateConnection = useStore((s) => s.updateConnection);
-  const existingGroups = useStore((s) =>
-    Array.from(
-      new Set(s.connections.map((c) => c.group?.trim()).filter((g): g is string => !!g))
-    ).sort()
+  const connections = useStore((s) => s.connections);
+  const existingGroups = useMemo(
+    () =>
+      Array.from(
+        new Set(connections.map((c) => c.group?.trim()).filter((g): g is string => !!g))
+      ).sort(),
+    [connections]
   );
 
   const [form, setForm] = useState<Omit<Connection, "id">>(
