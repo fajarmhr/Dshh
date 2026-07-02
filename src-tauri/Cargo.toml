@@ -1,0 +1,26 @@
+[package]
+name = "dshh"
+version = "0.1.0"
+description = "Multi-protocol connection client"
+authors = ["you"]
+edition = "2021"
+
+[lib]
+name = "dshh_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+anyhow = "1.0.103"
+async-trait = "0.1.89"
+russh = { version = "0.61.2", default-features = false, features = ["ring", "flate2", "rsa"] }
+russh-sftp = "2.3.0"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.150"
+serialport = "4.9.0"
+suppaftp = { version = "10.0.0", features = ["native-tls"] }
+tauri = { version = "2.11.5", features = [] }
+tauri-plugin-dialog = "2.7.1"
+tokio = { version = "1.52.3", features = ["full"] }

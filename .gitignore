@@ -1,0 +1,21 @@
+# Dependencies
+/node_modules
+
+# Build output
+/dist
+/src-tauri/target
+/src-tauri/gen
+
+# Distributables (share via GitHub Releases, not the repo)
+/share
+
+# Logs & scratch
+*.log
+app-icon.png
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+
+# Local Claude Code settings
+.claude/settings.local.json

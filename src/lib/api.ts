@@ -1,0 +1,61 @@
+import { invoke, Channel } from "@tauri-apps/api/core";
+import type { Connection, RemoteFile } from "./types";
+
+/**
+ * All backend calls funnel through here. Terminal-style byte streams
+ * (SSH shell, serial) use Tauri Channels so bytes flow straight from
+ * Rust into the frontend without polling. No child process named
+ * ssh/sftp/ftp is ever spawned: every protocol runs inside this app's
+ * own executable via Rust crates.
+ */
+
+export type ByteHandler = (bytes: Uint8Array) => void;
+
+function byteChannel(onData: ByteHandler): Channel<number[]> {
+  const chan = new Channel<number[]>();
+  chan.onmessage = (msg) => onData(Uint8Array.from(msg));
+  return chan;
+}
+
+// ---- SSH (interactive shell) ----
+export async function sshConnect(conn: Connection, onData: ByteHandler): Promise<string> {
+  return invoke<string>("ssh_connect", { conn, onData: byteChannel(onData) });
+}
+export const sshWrite = (id: string, data: string) => invoke("ssh_write", { id, data });
+export const sshResize = (id: string, cols: number, rows: number) =>
+  invoke("ssh_resize", { id, cols, rows });
+export const sshDisconnect = (id: string) => invoke("ssh_disconnect", { id });
+
+// ---- Serial ----
+export const serialListPorts = () => invoke<string[]>("serial_list_ports");
+export async function serialOpen(conn: Connection, onData: ByteHandler): Promise<string> {
+  return invoke<string>("serial_open", { conn, onData: byteChannel(onData) });
+}
+export const serialWrite = (id: string, data: string) => invoke("serial_write", { id, data });
+export const serialClose = (id: string) => invoke("serial_close", { id });
+
+// ---- SFTP ----
+export const sftpConnect = (conn: Connection) => invoke<string>("sftp_connect", { conn });
+export const sftpList = (id: string, path: string) =>
+  invoke<RemoteFile[]>("sftp_list", { id, path });
+export const sftpDownload = (id: string, remote: string, local: string) =>
+  invoke("sftp_download", { id, remote, local });
+export const sftpUpload = (id: string, local: string, remote: string) =>
+  invoke("sftp_upload", { id, local, remote });
+export const sftpDisconnect = (id: string) => invoke("sftp_disconnect", { id });
+
+// ---- FTP ----
+export const ftpConnect = (conn: Connection) => invoke<string>("ftp_connect", { conn });
+export const ftpList = (id: string, path: string) =>
+  invoke<RemoteFile[]>("ftp_list", { id, path });
+export const ftpDownload = (id: string, remote: string, local: string) =>
+  invoke("ftp_download", { id, remote, local });
+export const ftpUpload = (id: string, local: string, remote: string) =>
+  invoke("ftp_upload", { id, local, remote });
+export const ftpDisconnect = (id: string) => invoke("ftp_disconnect", { id });
+
+// ---- Logging ----
+export const logStart = (id: string, path: string) => invoke("log_start", { id, path });
+export const logStop = (id: string) => invoke("log_stop", { id });
+export const saveTextFile = (path: string, contents: string) =>
+  invoke("save_text_file", { path, contents });
