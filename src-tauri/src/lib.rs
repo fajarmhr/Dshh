@@ -3,6 +3,7 @@ mod logs;
 mod serial;
 mod sftp;
 mod ssh;
+mod tunnel;
 
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -53,6 +54,7 @@ pub struct AppState {
     pub sftp: Mutex<HashMap<String, sftp::SftpConn>>,
     pub ftp: Mutex<HashMap<String, ftp::FtpConn>>,
     pub serial: Mutex<HashMap<String, serial::SerialSession>>,
+    pub tunnels: Mutex<HashMap<String, tunnel::TunnelSession>>,
 }
 
 static COUNTER: AtomicU64 = AtomicU64::new(1);
@@ -88,6 +90,9 @@ pub fn run() {
             logs::log_start,
             logs::log_stop,
             logs::save_text_file,
+            logs::read_text_file,
+            tunnel::tunnel_start,
+            tunnel::tunnel_stop,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Dshh");

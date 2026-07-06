@@ -52,6 +52,13 @@ pub async fn save_text_file(path: String, contents: String) -> Result<(), String
     std::fs::write(&path, contents).map_err(|e| format!("Save failed: {e}"))
 }
 
+/// Read a UTF-8 text file — used to load the optional saved-sessions file
+/// (connections.json) from the folder chosen in Settings.
+#[tauri::command]
+pub async fn read_text_file(path: String) -> Result<String, String> {
+    std::fs::read_to_string(&path).map_err(|e| format!("Read failed: {e}"))
+}
+
 fn now_stamp() -> String {
     use std::time::{SystemTime, UNIX_EPOCH};
     let secs = SystemTime::now()
