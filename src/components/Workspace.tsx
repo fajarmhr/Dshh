@@ -10,6 +10,7 @@ export function Workspace() {
   const activeId = useStore((s) => s.activeSessionId);
   const splitId = useStore((s) => s.splitSessionId);
   const connections = useStore((s) => s.connections);
+  const transientConnections = useStore((s) => s.transientConnections);
   const toggleSplit = useStore((s) => s.toggleSplitSession);
 
   const active = sessions.find((s) => s.id === activeId) || null;
@@ -53,7 +54,9 @@ export function Workspace() {
             Panes are repositioned with CSS only — never reparented — so xterm
             instances stay intact in a split view. */}
         {sessions.map((s) => {
-          const conn = connections.find((c) => c.id === s.connectionId);
+          const conn =
+            connections.find((c) => c.id === s.connectionId) ??
+            transientConnections.find((c) => c.id === s.connectionId);
           if (!conn) return null;
           const isActive = s.id === activeId;
           const isSplitPane = s.id === split;
@@ -69,7 +72,9 @@ export function Workspace() {
               className={`absolute ${isSplitPane ? "border-l border-edge" : ""}`}
               style={style}
             >
-              {s.protocol === "ssh" || s.protocol === "serial" ? (
+              {s.protocol === "ssh" ||
+              s.protocol === "serial" ||
+              s.protocol === "local" ? (
                 <TerminalView session={s} conn={conn} />
               ) : (
                 <FileBrowser session={s} conn={conn} />

@@ -5,6 +5,7 @@ import {
   FolderTree,
   Server,
   Cable,
+  SquareTerminal,
   Pencil,
   Trash2,
   Copy,
@@ -13,6 +14,8 @@ import {
   Settings as SettingsIcon,
 } from "lucide-react";
 import { useStore } from "../store";
+import { localOpenAdmin } from "../lib/api";
+import { LocalLauncher } from "./LocalLauncher";
 import {
   PROTOCOL_COLORS,
   UNGROUPED,
@@ -25,6 +28,7 @@ const ICONS: Record<Protocol, React.ComponentType<{ size?: number; color?: strin
   sftp: FolderTree,
   ftp: Server,
   serial: Cable,
+  local: SquareTerminal,
 };
 
 const WIDTH_KEY = "dshh.sidebarWidth";
@@ -35,9 +39,12 @@ const DEFAULT_WIDTH = 256;
 const clampWidth = (w: number) => Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, w));
 
 function connectionDetail(c: Connection): string {
-  return c.protocol === "serial"
-    ? `${c.serialPort} · ${c.baudRate} baud`
-    : `${c.username ? c.username + "@" : ""}${c.host}:${c.port}`;
+  if (c.protocol === "serial") return `${c.serialPort} · ${c.baudRate} baud`;
+  if (c.protocol === "local")
+    return [c.shell ?? "shell", c.admin ? "admin" : null, c.cwd || null]
+      .filter(Boolean)
+      .join(" · ");
+  return `${c.username ? c.username + "@" : ""}${c.host}:${c.port}`;
 }
 
 export function Sidebar({
@@ -109,6 +116,16 @@ export function Sidebar({
       return next;
     });
 
+  // An elevated saved terminal can't embed, so it opens in its own UAC window;
+  // everything else opens as a normal tab.
+  const activate = (c: Connection) => {
+    if (c.protocol === "local" && c.admin) {
+      localOpenAdmin(c.shell ?? "cmd", c.cwd ?? null).catch(() => {});
+    } else {
+      openSession(c.id, c.name);
+    }
+  };
+
   return (
     <aside
       ref={asideRef}
@@ -126,9 +143,12 @@ export function Sidebar({
             dshh
           </span>
         </div>
-        <button onClick={onNew} title="New connection" className="no-drag tb-btn">
-          <Plus size={16} />
-        </button>
+        <div className="no-drag flex items-center gap-1">
+          <LocalLauncher />
+          <button onClick={onNew} title="New connection" className="tb-btn">
+            <Plus size={16} />
+          </button>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto px-2 pb-4">
@@ -165,7 +185,7 @@ export function Sidebar({
                   return (
                     <div
                       key={c.id}
-                      onDoubleClick={() => openSession(c.id, c.name)}
+                      onDoubleClick={() => activate(c)}
                       title={`${c.name}\n${connectionDetail(c)}\n\nDouble-click to open`}
                       className="group flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 transition hover:bg-bg-hover"
                     >

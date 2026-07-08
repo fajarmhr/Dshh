@@ -1,18 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
 import { X, RefreshCw } from "lucide-react";
 import { useStore } from "../store";
-import { serialListPorts } from "../lib/api";
+import { serialListPorts, localListShells } from "../lib/api";
 import {
   DEFAULT_PORTS,
   PROTOCOL_COLORS,
   PROTOCOL_LABELS,
   type AuthMethod,
   type Connection,
+  type LocalShell,
   type Protocol,
 } from "../lib/types";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 
-const PROTOCOLS: Protocol[] = ["ssh", "sftp", "ftp", "serial"];
+const PROTOCOLS: Protocol[] = ["ssh", "sftp", "ftp", "serial", "local"];
 const BAUD_RATES = [9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600];
 
 export function ConnectionModal({
@@ -47,6 +48,7 @@ export function ConnectionModal({
     }
   );
   const [ports, setPorts] = useState<string[]>([]);
+  const [shells, setShells] = useState<LocalShell[]>([]);
 
   const set = <K extends keyof Connection>(k: K, v: Connection[K]) =>
     setForm((f) => ({ ...f, [k]: v }));
@@ -65,6 +67,19 @@ export function ConnectionModal({
   }, [form.protocol]);
 
   useEffect(() => {
+    if (form.protocol !== "local") return;
+    localListShells()
+      .then((list) => {
+        setShells(list);
+        if (list.length && !list.some((s) => s.id === form.shell)) {
+          set("shell", list[0].id);
+        }
+      })
+      .catch(() => setShells([]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.protocol]);
+
+  useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
@@ -73,7 +88,12 @@ export function ConnectionModal({
   }, [onClose]);
 
   const changeProtocol = (p: Protocol) => {
-    setForm((f) => ({ ...f, protocol: p, port: DEFAULT_PORTS[p] || f.port }));
+    setForm((f) => ({
+      ...f,
+      protocol: p,
+      port: DEFAULT_PORTS[p] || f.port,
+      shell: p === "local" ? f.shell ?? "cmd" : f.shell,
+    }));
   };
 
   const pickKey = async () => {
@@ -84,7 +104,11 @@ export function ConnectionModal({
   const save = () => {
     const name =
       form.name.trim() ||
-      (form.protocol === "serial" ? form.serialPort || "Serial" : `${form.host}`);
+      (form.protocol === "serial"
+        ? form.serialPort || "Serial"
+        : form.protocol === "local"
+          ? shells.find((s) => s.id === form.shell)?.label ?? "Local terminal"
+          : `${form.host}`);
     const payload = { ...form, name };
     if (initial) updateConnection(initial.id, payload);
     else addConnection(payload);
@@ -92,7 +116,8 @@ export function ConnectionModal({
   };
 
   const isSerial = form.protocol === "serial";
-  const isNet = !isSerial;
+  const isLocal = form.protocol === "local";
+  const isNet = !isSerial && !isLocal;
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -107,7 +132,7 @@ export function ConnectionModal({
         </div>
 
         <div className="max-h-[70vh] space-y-4 overflow-y-auto px-5 py-4">
-          <div className="grid grid-cols-4 gap-1 rounded-lg border border-edge bg-bg-inset p-1">
+          <div className="grid grid-cols-5 gap-1 rounded-lg border border-edge bg-bg-inset p-1">
             {PROTOCOLS.map((p) => {
               const activeP = form.protocol === p;
               return (
@@ -291,6 +316,43 @@ export function ConnectionModal({
                   ))}
                 </select>
               </div>
+            </>
+          )}
+
+          {isLocal && (
+            <>
+              <div>
+                <label className="field-label">Shell</label>
+                <select
+                  className="field-input font-mono text-[13px]"
+                  value={form.shell ?? ""}
+                  onChange={(e) => set("shell", e.target.value)}
+                >
+                  {shells.length === 0 && <option value="">No shells found</option>}
+                  {shells.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="field-label">Working directory (optional)</label>
+                <input
+                  className="field-input font-mono text-[13px]"
+                  value={form.cwd ?? ""}
+                  placeholder="blank = home directory"
+                  onChange={(e) => set("cwd", e.target.value)}
+                />
+              </div>
+              <label className="flex cursor-pointer items-center gap-2.5 text-sm text-ink-mid">
+                <input
+                  type="checkbox"
+                  checked={!!form.admin}
+                  onChange={(e) => set("admin", e.target.checked)}
+                />
+                Run as Administrator (opens in a separate elevated window)
+              </label>
             </>
           )}
         </div>

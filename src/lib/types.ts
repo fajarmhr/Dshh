@@ -1,4 +1,4 @@
-export type Protocol = "ssh" | "sftp" | "ftp" | "serial";
+export type Protocol = "ssh" | "sftp" | "ftp" | "serial" | "local";
 
 export type AuthMethod = "password" | "key" | "agent";
 
@@ -31,6 +31,17 @@ export interface Connection {
   color?: string;
   // SSH extras
   tunnels?: TunnelDef[];
+  // Local terminal: shell id (from local_list_shells), optional working dir,
+  // and whether to launch elevated (opens in a separate UAC window).
+  shell?: string;
+  cwd?: string;
+  admin?: boolean;
+}
+
+/** A local shell the backend can launch, from `local_list_shells`. */
+export interface LocalShell {
+  id: string;
+  label: string;
 }
 
 export type SessionStatus = "connecting" | "connected" | "error" | "closed";
@@ -74,6 +85,7 @@ export const DEFAULT_PORTS: Record<Protocol, number> = {
   sftp: 22,
   ftp: 21,
   serial: 0,
+  local: 0,
 };
 
 export const PROTOCOL_LABELS: Record<Protocol, string> = {
@@ -81,6 +93,7 @@ export const PROTOCOL_LABELS: Record<Protocol, string> = {
   sftp: "SFTP",
   ftp: "FTP",
   serial: "Serial",
+  local: "Local",
 };
 
 export const PROTOCOL_COLORS: Record<Protocol, string> = {
@@ -88,6 +101,7 @@ export const PROTOCOL_COLORS: Record<Protocol, string> = {
   sftp: "#3ecf8e",
   ftp: "#e8a54c",
   serial: "#b78af7",
+  local: "#5fd0c5",
 };
 
 export const UNGROUPED = "Ungrouped";

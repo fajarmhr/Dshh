@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  body { margin:0; background:#0a0e14; color:#e3eaf3; font-family:'Geist',system-ui,sans-serif; -webkit-font-smoothing:antialiased; }
+  a { color:#7ca4ff; text-decoration:none; }
+  a:hover { color:#a8c2ff; }
+  ::selection { background:rgba(91,140,255,0.35); }
+  @keyframes blink { 0%,54% {opacity:1} 55%,100% {opacity:0} }
+  @keyframes spin { from {transform:rotate(0)} to {transform:rotate(360deg)} }
+</style>
+</helmet>
+
+<div data-screen-label="Dshh site" style="min-height:100vh;background:#0a0e14;color:#e3eaf3;font-family:'Geist',system-ui,sans-serif;">
+
+  <!-- ============ NAV ============ -->
+  <div data-screen-label="Nav" style="position:sticky;top:0;z-index:50;background:rgba(10,14,20,0.88);backdrop-filter:blur(12px);border-bottom:1px solid #131a24;">
+    <div style="max-width:1200px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:0 24px;height:64px;">
+      <div style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+        <div style="display:flex;width:26px;height:26px;align-items:center;justify-content:center;border-radius:6px;border:1px solid rgba(91,140,255,0.3);background:rgba(91,140,255,0.1);font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;color:#5b8cff;">&gt;_</div>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:600;letter-spacing:0.08em;color:#e3eaf3;">dshh</span>
+      </div>
+      <sc-if value="{{ isDesktop }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex;align-items:center;gap:26px;font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:0.15em;">
+          <span onClick="{{ goFeatures }}" style="display:inline-flex;align-items:center;gap:7px;color:#93a1b3;cursor:pointer;" style-hover="color:#e3eaf3;"><sc-if value="{{ onFeatures }}" hint-placeholder-val="{{ false }}"><span style="width:5px;height:5px;border-radius:99px;background:#5b8cff;"></span></sc-if>features</span>
+          <span onClick="{{ goDownload }}" style="display:inline-flex;align-items:center;gap:7px;color:#93a1b3;cursor:pointer;" style-hover="color:#e3eaf3;"><sc-if value="{{ onDownload }}" hint-placeholder-val="{{ false }}"><span style="width:5px;height:5px;border-radius:99px;background:#5b8cff;"></span></sc-if>download</span>
+          <span onClick="{{ goChangelog }}" style="display:inline-flex;align-items:center;gap:7px;color:#93a1b3;cursor:pointer;" style-hover="color:#e3eaf3;"><sc-if value="{{ onChangelog }}" hint-placeholder-val="{{ false }}"><span style="width:5px;height:5px;border-radius:99px;background:#5b8cff;"></span></sc-if>changelog</span>
+          <span onClick="{{ goDocs }}" style="display:inline-flex;align-items:center;gap:7px;color:#93a1b3;cursor:pointer;" style-hover="color:#e3eaf3;"><sc-if value="{{ onDocs }}" hint-placeholder-val="{{ false }}"><span style="width:5px;height:5px;border-radius:99px;background:#5b8cff;"></span></sc-if>docs</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span onClick="{{ openGithub }}" style="display:inline-flex;align-items:center;gap:6px;border:1px solid #2a3646;border-radius:8px;padding:8px 14px;font-size:13px;color:#93a1b3;cursor:pointer;" style-hover="color:#e3eaf3;border-color:#38465a;">GitHub ↗</span>
+          <span onClick="{{ goDownload }}" style="display:inline-flex;align-items:center;gap:6px;background:#5b8cff;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:500;color:#ffffff;cursor:pointer;" style-hover="background:#7ca4ff;">↓ Download</span>
+        </div>
+      </sc-if>
+      <sc-if value="{{ isMobile }}" hint-placeholder-val="{{ false }}">
+        <span onClick="{{ toggleMenu }}" style="display:inline-flex;width:38px;height:38px;align-items:center;justify-content:center;border:1px solid #2a3646;border-radius:8px;font-size:15px;color:#93a1b3;cursor:pointer;">≡</span>
+      </sc-if>
+    </div>
+    <sc-if value="{{ mobileMenuOpen }}" hint-placeholder-val="{{ false }}">
+      <div style="border-top:1px solid #131a24;background:#0d121a;padding:12px 24px 18px 24px;display:flex;flex-direction:column;gap:4px;">
+        <span onClick="{{ goFeatures }}" style="padding:11px 4px;font-family:'JetBrains Mono',monospace;font-size:12px;text-transform:uppercase;letter-spacing:0.15em;color:#93a1b3;cursor:pointer;border-bottom:1px solid #131a24;">features</span>
+        <span onClick="{{ goDownload }}" style="padding:11px 4px;font-family:'JetBrains Mono',monospace;font-size:12px;text-transform:uppercase;letter-spacing:0.15em;color:#93a1b3;cursor:pointer;border-bottom:1px solid #131a24;">download</span>
+        <span onClick="{{ goChangelog }}" style="padding:11px 4px;font-family:'JetBrains Mono',monospace;font-size:12px;text-transform:uppercase;letter-spacing:0.15em;color:#93a1b3;cursor:pointer;border-bottom:1px solid #131a24;">changelog</span>
+        <span onClick="{{ goDocs }}" style="padding:11px 4px;font-family:'JetBrains Mono',monospace;font-size:12px;text-transform:uppercase;letter-spacing:0.15em;color:#93a1b3;cursor:pointer;">docs</span>
+        <span onClick="{{ goDownload }}" style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:10px;background:#5b8cff;border-radius:8px;padding:13px 16px;font-size:14px;font-weight:500;color:#ffffff;cursor:pointer;">↓ Download for Windows</span>
+      </div>
+    </sc-if>
+  </div>
+
+  <!-- ============ HERO ============ -->
+  <div data-screen-label="Hero" style="position:relative;overflow:hidden;">
+    <div style="position:absolute;left:50%;top:-160px;width:1100px;height:520px;transform:translateX(-50%);background:radial-gradient(560px 300px at 50% 30%, rgba(91,140,255,0.13), transparent 70%);pointer-events:none;"></div>
+    <div style="position:relative;max-width:1200px;margin:0 auto;padding:0 24px;">
+      <sc-if value="{{ isDesktop }}" hint-placeholder-val="{{ true }}">
+        <div style="padding-top:96px;">
+          <div style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:0.18em;color:#5a6878;">ssh · sftp · ftp · serial — one exe</div>
+          <h1 style="margin:22px 0 0 0;font-size:72px;line-height:1.02;font-weight:700;letter-spacing:-0.03em;color:#e3eaf3;">Every protocol.<br>One process.</h1>
+          <p style="margin:26px 0 0 0;max-width:620px;font-size:17px;line-height:1.7;color:#93a1b3;text-wrap:pretty;">Dshh is a tabbed SSH, SFTP, FTP and serial client for Windows. Every protocol is implemented in-process, in Rust, inside a single portable executable — no <span style="font-family:'JetBrains Mono',monospace;font-size:15px;color:#e3eaf3;">ssh.exe</span>, no child processes, no installer.</p>
+          <div style="display:flex;align-items:center;gap:12px;margin-top:34px;">
+            <span onClick="{{ openRelease }}" style="display:inline-flex;align-items:center;gap:8px;background:#5b8cff;border-radius:8px;padding:13px 24px;font-size:14.5px;font-weight:500;color:#ffffff;cursor:pointer;box-shadow:0 8px 24px -8px rgba(91,140,255,0.5);" style-hover="background:#7ca4ff;">↓ Download for Windows</span>
+            <span onClick="{{ goChangelog }}" style="display:inline-flex;align-items:center;gap:8px;border:1px solid #2a3646;border-radius:8px;padding:13px 22px;font-size:14.5px;color:#93a1b3;cursor:pointer;" style-hover="color:#e3eaf3;border-color:#38465a;">View changelog</span>
+          </div>
+          <div style="margin-top:18px;font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.03em;color:#5a6878;">v0.1.0 · portable zip · win64 · no installer · no admin rights</div>
+        </div>
+      </sc-if>
+      <sc-if value="{{ isMobile }}" hint-placeholder-val="{{ false }}">
+        <div style="padding-top:56px;">
+          <div style="font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:0.18em;color:#5a6878;">ssh · sftp · ftp · serial</div>
+          <h1 style="margin:16px 0 0 0;font-size:42px;line-height:1.06;font-weight:700;letter-spacing:-0.028em;color:#e3eaf3;">Every protocol. One process.</h1>
+          <p style="margin:18px 0 0 0;font-size:15px;line-height:1.65;color:#93a1b3;text-wrap:pretty;">A tabbed SSH, SFTP, FTP and serial client for Windows — every protocol in-process, in Rust, in one portable exe.</p>
+          <div style="display:flex;flex-direction:column;gap:10px;margin-top:26px;">
+            <span onClick="{{ openRelease }}" style="display:flex;align-items:center;justify-content:center;gap:8px;background:#5b8cff;border-radius:8px;padding:14px 20px;font-size:14.5px;font-weight:500;color:#ffffff;cursor:pointer;">↓ Download for Windows</span>
+            <span onClick="{{ goChangelog }}" style="display:flex;align-items:center;justify-content:center;gap:8px;border:1px solid #2a3646;border-radius:8px;padding:13px 20px;font-size:14px;color:#93a1b3;cursor:pointer;">View changelog</span>
+          </div>
+          <div style="margin-top:14px;text-align:center;font-family:'JetBrains Mono',monospace;font-size:10px;color:#5a6878;">v0.1.0 · portable zip · win64 · no admin</div>
+        </div>
+      </sc-if>
+
+      <!-- app mockup (interactive) -->
+      <div style="position:relative;margin-top:56px;">
+        <div style="position:relative;border:1px solid #1c2531;border-bottom:none;border-radius:12px 12px 0 0;overflow:hidden;background:#0a0e14;box-shadow:0 -20px 80px -30px rgba(91,140,255,0.25);">
+          <div style="display:flex;align-items:center;justify-content:space-between;height:34px;padding:0 4px 0 12px;background:#0d121a;border-bottom:1px solid #1c2531;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <img src="assets/dshh-icon.png" alt="Dshh" style="width:15px;height:15px;border-radius:3px;">
+              <span style="font-size:12px;color:#93a1b3;">Dshh</span>
+            </div>
+            <div style="display:flex;align-items:center;font-size:12px;color:#5a6878;">
+              <span style="display:inline-flex;width:40px;height:34px;align-items:center;justify-content:center;">–</span>
+              <span style="display:inline-flex;width:40px;height:34px;align-items:center;justify-content:center;font-size:10px;">▢</span>
+              <span style="display:inline-flex;width:40px;height:34px;align-items:center;justify-content:center;">✕</span>
+            </div>
+          </div>
+          <div style="display:flex;height:500px;">
+            <sc-if value="{{ isDesktop }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex;flex-direction:column;width:248px;flex-shrink:0;background:#0d121a;border-right:1px solid #1c2531;">
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:12px;">
+                  <div style="display:flex;align-items:center;gap:10px;">
+                    <div style="display:flex;width:24px;height:24px;align-items:center;justify-content:center;border-radius:6px;border:1px solid rgba(91,140,255,0.3);background:rgba(91,140,255,0.1);font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;color:#5b8cff;">&gt;_</div>
+                    <span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;letter-spacing:0.08em;color:#e3eaf3;">dshh</span>
+                  </div>
+                  <span style="font-size:15px;color:#93a1b3;cursor:pointer;">+</span>
+                </div>
+                <div style="flex:1;padding:0 8px;overflow:hidden;">
+                  <div style="display:flex;align-items:center;gap:5px;padding:4px 6px;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:0.14em;color:#5a6878;">
+                    <span style="font-size:8px;">▾</span><span>production</span>
+                    <span style="margin-left:auto;border-radius:4px;background:#131a24;padding:1px 6px;font-size:9px;">3</span>
+                  </div>
+                  <div onClick="{{ setTabSsh }}" style="display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:6px;cursor:pointer;background:{{ rowSshBg }};" style-hover="background:#1a2330;">
+                    <div style="display:flex;width:28px;height:28px;flex-shrink:0;align-items:center;justify-content:center;border-radius:6px;background:rgba(91,140,255,0.08);font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;color:#5b8cff;">&gt;_</div>
+                    <div style="min-width:0;">
+                      <div style="font-size:13px;color:#e3eaf3;">prod-web-01</div>
+                      <div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#5a6878;">admin@10.0.4.21:22</div>
+                    </div>
+                  </div>
+                  <div onClick="{{ setTabSsh }}" style="display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:6px;cursor:pointer;" style-hover="background:#131a24;">
+                    <div style="display:flex;width:28px;height:28px;flex-shrink:0;align-items:center;justify-content:center;border-radius:6px;background:rgba(91,140,255,0.08);font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;color:#5b8cff;">&gt;_</div>
+                    <div style="min-width:0;">
+                      <div style="font-size:13px;color:#e3eaf3;">prod-web-02</div>
+                      <div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#5a6878;">admin@10.0.4.22:22</div>
+                    </div>
+                  </div>
+                  <div onClick="{{ setTabSftp }}" style="display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:6px;cursor:pointer;background:{{ rowSftpBg }};" style-hover="background:#1a2330;">
+                    <div style="display:flex;width:28px;height:28px;flex-shrink:0;align-items:center;justify-content:center;border-radius:6px;background:rgba(62,207,142,0.08);font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;color:#3ecf8e;">~/</div>
+                    <div style="min-width:0;">
+                      <div style="font-size:13px;color:#e3eaf3;">assets-bucket</div>
+                      <div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#5a6878;">deploy@10.0.4.30:22</div>
+                    </div>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:5px;padding:4px 6px;margin-top:10px;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:0.14em;color:#5a6878;">
+                    <span style="font-size:8px;">▾</span><span>lab</span>
+                    <span style="margin-left:auto;border-radius:4px;background:#131a24;padding:1px 6px;font-size:9px;">2</span>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:6px;">
+                    <div style="display:flex;width:28px;height:28px;flex-shrink:0;align-items:center;justify-content:center;border-radius:6px;background:rgba(232,165,76,0.08);font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;color:#e8a54c;">⇅</div>
+                    <div style="min-width:0;">
+                      <div style="font-size:13px;color:#e3eaf3;">legacy-nas</div>
+                      <div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#5a6878;">anonymous@192.168.1.40:21</div>
+                    </div>
+                  </div>
+                  <div onClick="{{ setTabSerial }}" style="display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:6px;cursor:pointer;background:{{ rowSerialBg }};" style-hover="background:#1a2330;">
+                    <div style="display:flex;width:28px;height:28px;flex-shrink:0;align-items:center;justify-content:center;border-radius:6px;background:rgba(183,138,247,0.08);font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;color:#b78af7;">⌁</div>
+                    <div style="min-width:0;">
+                      <div style="font-size:13px;color:#e3eaf3;">bench-rig</div>
+                      <div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#5a6878;">COM4 · 115200 baud</div>
+                    </div>
+                  </div>
+                </div>
+                <div style="display:flex;align-items:center;justify-content:space-between;border-top:1px solid #1c2531;padding:8px 12px;">
+                  <span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:0.04em;color:#5a6878;">in-process · no ssh.exe</span>
+                  <span style="font-size:12px;color:#5a6878;">⚙</span>
+                </div>
+              </div>
+            </sc-if>
+            <div style="display:flex;min-width:0;flex:1;flex-direction:column;background:#0a0e14;">
+              <div style="display:flex;height:36px;flex-shrink:0;align-items:stretch;border-bottom:1px solid #1c2531;background:#0d121a;overflow:hidden;">
+                <div onClick="{{ setTabSsh }}" style="position:relative;display:flex;align-items:center;gap:7px;border-right:1px solid #1c2531;padding:0 14px;font-size:12.5px;cursor:pointer;background:{{ sshTabBg }};color:{{ sshTabTxt }};">
+                  <sc-if value="{{ tabSsh }}" hint-placeholder-val="{{ true }}"><div style="position:absolute;left:0;right:0;top:0;height:2px;background:#5b8cff;"></div></sc-if>
+                  <span style="width:6px;height:6px;flex-shrink:0;border-radius:99px;background:#3ecf8e;"></span>
+                  <span style="font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:600;letter-spacing:0.1em;color:#5b8cff;">SSH</span>
+                  <span>prod-web-01</span>
+                </div>
+                <div onClick="{{ setTabSftp }}" style="position:relative;display:flex;align-items:center;gap:7px;border-right:1px solid #1c2531;padding:0 14px;font-size:12.5px;cursor:pointer;background:{{ sftpTabBg }};color:{{ sftpTabTxt }};">
+                  <sc-if value="{{ tabSftp }}" hint-placeholder-val="{{ false }}"><div style="position:absolute;left:0;right:0;top:0;height:2px;background:#5b8cff;"></div></sc-if>
+                  <span style="width:6px;height:6px;flex-shrink:0;border-radius:99px;background:#3ecf8e;"></span>
+                  <span style="font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:600;letter-spacing:0.1em;color:#3ecf8e;">SFTP</span>
+                  <span>assets-bucket</span>
+                </div>
+                <div onClick="{{ setTabSerial }}" style="position:relative;display:flex;align-items:center;gap:7px;border-right:1px solid #1c2531;padding:0 14px;font-size:12.5px;cursor:pointer;background:{{ serialTabBg }};color:{{ serialTabTxt }};">
+                  <sc-if value="{{ tabSerial }}" hint-placeholder-val="{{ false }}"><div style="position:absolute;left:0;right:0;top:0;height:2px;background:#5b8cff;"></div></sc-if>
+                  <span style="width:6px;height:6px;flex-shrink:0;border-radius:99px;background:#e8a54c;"></span>
+                  <span style="font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:600;letter-spacing:0.1em;color:#b78af7;">SERIAL</span>
+                  <span>bench-rig</span>
+                </div>
+              </div>
+              <div style="flex:1;min-height:0;overflow:hidden;">
+                <sc-if value="{{ tabSsh }}" hint-placeholder-val="{{ true }}">
+                  <div style="padding:14px 16px;font-family:'JetBrains Mono',monospace;font-size:11.5px;line-height:1.65;">
+                    <div style="color:#5a6878;">· connecting to prod-web-01 …</div>
+                    <div style="color:#93a1b3;">Welcome to Ubuntu 24.04.2 LTS (GNU/Linux 6.8.0-45-generic x86_64)</div>
+                    <div style="color:#5a6878;">Last login: Tue Jul  7 08:41:07 2026 from 10.0.4.18</div>
+                    <div style="margin-top:6px;"><span style="color:#3ecf8e;">admin@prod-web-01</span><span style="color:#5a6878;">:</span><span style="color:#5b8cff;">~</span><span style="color:#93a1b3;">$ uptime</span></div>
+                    <div style="color:#93a1b3;"> 09:14:22 up 84 days,  3:12,  1 user,  load average: 0.18, 0.11, 0.09</div>
+                    <div style="margin-top:6px;"><span style="color:#3ecf8e;">admin@prod-web-01</span><span style="color:#5a6878;">:</span><span style="color:#5b8cff;">~</span><span style="color:#93a1b3;">$ docker ps</span></div>
+                    <div style="color:#5a6878;">CONTAINER ID   IMAGE          STATUS         NAMES</div>
+                    <div style="color:#93a1b3;">f3a91c02be71   nginx:1.27     Up 12 days     edge</div>
+                    <div style="color:#93a1b3;">08c4d1a99e02   api:2026.06    Up 12 days     api</div>
+                    <div style="color:#93a1b3;">b1e0c77f4d55   postgres:16    Up 12 days     db</div>
+                    <div style="margin-top:6px;"><span style="color:#3ecf8e;">admin@prod-web-01</span><span style="color:#5a6878;">:</span><span style="color:#5b8cff;">~</span><span style="color:#93a1b3;">$ </span><span style="display:inline-block;width:7px;height:13px;vertical-align:-2px;background:#5b8cff;animation:blink 1.1s step-end infinite;"></span></div>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ tabSftp }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;flex-direction:column;height:100%;">
+                    <div style="display:flex;align-items:center;gap:10px;border-bottom:1px solid #1c2531;padding:9px 14px;">
+                      <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#3ecf8e;">~/</span>
+                      <span style="font-family:'JetBrains Mono',monospace;font-size:11.5px;color:#93a1b3;">/var/www/assets</span>
+                      <span style="margin-left:auto;border:1px solid #1c2531;border-radius:6px;background:#131a24;padding:3px 10px;font-family:'JetBrains Mono',monospace;font-size:10px;color:#93a1b3;cursor:pointer;">↑ upload</span>
+                      <span style="border:1px solid #1c2531;border-radius:6px;background:#131a24;padding:3px 8px;font-family:'JetBrains Mono',monospace;font-size:10px;color:#93a1b3;cursor:pointer;">⟳</span>
+                    </div>
+                    <div style="display:grid;grid-template-columns:1fr 80px 130px;gap:12px;border-bottom:1px solid #131a24;padding:7px 14px;font-family:'JetBrains Mono',monospace;font-size:9.5px;text-transform:uppercase;letter-spacing:0.12em;color:#5a6878;">
+                      <span>name</span><span style="text-align:right;">size</span><span>modified</span>
+                    </div>
+                    <div style="flex:1;overflow:hidden;font-family:'JetBrains Mono',monospace;font-size:11.5px;">
+                      <div style="display:grid;grid-template-columns:1fr 80px 130px;gap:12px;padding:7px 14px;cursor:pointer;" style-hover="background:#0d121a;"><span style="color:#5b8cff;">releases/</span><span style="text-align:right;color:#5a6878;">—</span><span style="color:#5a6878;">jul 07 09:02</span></div>
+                      <div style="display:grid;grid-template-columns:1fr 80px 130px;gap:12px;padding:7px 14px;cursor:pointer;" style-hover="background:#0d121a;"><span style="color:#5b8cff;">img/</span><span style="text-align:right;color:#5a6878;">—</span><span style="color:#5a6878;">jun 30 17:44</span></div>
+                      <div style="display:grid;grid-template-columns:1fr 80px 130px;gap:12px;padding:7px 14px;cursor:pointer;" style-hover="background:#0d121a;"><span style="color:#5b8cff;">fonts/</span><span style="text-align:right;color:#5a6878;">—</span><span style="color:#5a6878;">jun 30 17:44</span></div>
+                      <div style="display:grid;grid-template-columns:1fr 80px 130px;gap:12px;padding:7px 14px;cursor:pointer;" style-hover="background:#0d121a;"><span style="color:#e3eaf3;">app-2026.06.3.js</span><span style="text-align:right;color:#93a1b3;">412 KB</span><span style="color:#5a6878;">jul 07 08:58</span></div>
+                      <div style="display:grid;grid-template-columns:1fr 80px 130px;gap:12px;padding:7px 14px;cursor:pointer;" style-hover="background:#0d121a;"><span style="color:#e3eaf3;">styles.css</span><span style="text-align:right;color:#93a1b3;">88 KB</span><span style="color:#5a6878;">jul 07 08:58</span></div>
+                      <div style="display:grid;grid-template-columns:1fr 80px 130px;gap:12px;padding:7px 14px;cursor:pointer;" style-hover="background:#0d121a;"><span style="color:#e3eaf3;">manifest.json</span><span style="text-align:right;color:#93a1b3;">2.1 KB</span><span style="color:#5a6878;">jun 30 17:41</span></div>
+                    </div>
+                    <div style="border-top:1px solid #1c2531;padding:7px 14px;font-family:'JetBrains Mono',monospace;font-size:10px;color:#5a6878;">6 items · sftp · connected as deploy</div>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ tabSerial }}" hint-placeholder-val="{{ false }}">
+                  <div style="padding:14px 16px;font-family:'JetBrains Mono',monospace;font-size:11.5px;line-height:1.65;">
+                    <div style="color:#5a6878;">· opened COM4 @ 115200 8N1</div>
+                    <div><span style="color:#b78af7;">[ 0.000]</span><span style="color:#93a1b3;"> boot: ESP32-S3 rev2, flash 8MB</span></div>
+                    <div><span style="color:#b78af7;">[ 0.412]</span><span style="color:#93a1b3;"> wifi: sta connected, rssi -58</span></div>
+                    <div><span style="color:#b78af7;">[ 2.103]</span><span style="color:#93a1b3;"> sensor: temp=24.6C hum=41%</span></div>
+                    <div><span style="color:#b78af7;">[ 2.104]</span><span style="color:#93a1b3;"> mqtt: publish ok → lab/bench</span></div>
+                    <div><span style="color:#b78af7;">[12.103]</span><span style="color:#93a1b3;"> sensor: temp=24.7C hum=41%</span></div>
+                    <div><span style="color:#b78af7;">[12.105]</span><span style="color:#93a1b3;"> mqtt: publish ok → lab/bench</span></div>
+                    <div style="margin-top:6px;"><span style="color:#5a6878;">&gt; </span><span style="display:inline-block;width:7px;height:13px;vertical-align:-2px;background:#b78af7;animation:blink 1.1s step-end infinite;"></span></div>
+                  </div>
+                </sc-if>
+              </div>
+              <div style="flex-shrink:0;border-top:1px solid #1c2531;background:#0d121a;padding:8px 12px 10px 12px;">
+                <div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;">
+                  <span style="border:1px solid #1c2531;border-radius:6px;background:#131a24;padding:3px 10px;font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#93a1b3;cursor:pointer;" style-hover="border-color:#2a3646;color:#e3eaf3;">df -h</span>
+                  <span style="border:1px solid #1c2531;border-radius:6px;background:#131a24;padding:3px 10px;font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#93a1b3;cursor:pointer;" style-hover="border-color:#2a3646;color:#e3eaf3;">docker ps</span>
+                  <span style="border:1px solid #1c2531;border-radius:6px;background:#131a24;padding:3px 10px;font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#93a1b3;cursor:pointer;" style-hover="border-color:#2a3646;color:#e3eaf3;">tail -f syslog</span>
+                  <span style="padding:3px 6px;font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#5a6878;cursor:pointer;">+ manage</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;margin-top:8px;">
+                  <div style="display:flex;flex:1;min-width:0;align-items:center;gap:8px;border:1px solid #1c2531;border-radius:6px;background:#070a0f;padding:7px 12px;font-family:'JetBrains Mono',monospace;font-size:11.5px;">
+                    <span style="color:#5a6878;">$</span>
+                    <span style="color:#5a6878;">run a command…</span>
+                    <span style="margin-left:auto;color:#38465a;font-size:10px;">ctrl+k</span>
+                  </div>
+                  <span style="display:inline-flex;align-items:center;border:1px solid #1c2531;border-radius:6px;background:#131a24;padding:6px 10px;font-family:'JetBrains Mono',monospace;font-size:10px;color:#5a6878;">broadcast off</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ PROTOCOLS ============ -->
+  <div id="dsh-features" data-screen-label="Protocols" style="border-top:1px solid #131a24;">
+    <div style="max-width:1200px;margin:0 auto;padding:84px 24px;">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:0.18em;color:#5a6878;">protocols</div>
+      <h2 style="margin:16px 0 0 0;font-size:36px;font-weight:600;letter-spacing:-0.022em;color:#e3eaf3;">Four protocols. Zero child processes.</h2>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:16px;margin-top:40px;">
+        <div style="border:1px solid #1c2531;border-radius:12px;background:#0d121a;padding:24px;" style-hover="border-color:rgba(91,140,255,0.4);">
+          <div style="display:flex;width:36px;height:36px;align-items:center;justify-content:center;border-radius:8px;background:rgba(91,140,255,0.1);font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:#5b8cff;">&gt;_</div>
+          <div style="display:flex;align-items:baseline;gap:8px;margin-top:18px;">
+            <span style="font-size:16px;font-weight:600;color:#e3eaf3;">SSH</span>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#5a6878;">russh</span>
+          </div>
+          <p style="margin:8px 0 0 0;font-size:13.5px;line-height:1.65;color:#93a1b3;text-wrap:pretty;">Real xterm terminal with buffer search, session logging, highlight rules and port forwarding.</p>
+        </div>
+        <div style="border:1px solid #1c2531;border-radius:12px;background:#0d121a;padding:24px;" style-hover="border-color:rgba(62,207,142,0.4);">
+          <div style="display:flex;width:36px;height:36px;align-items:center;justify-content:center;border-radius:8px;background:rgba(62,207,142,0.1);font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:#3ecf8e;">~/</div>
+          <div style="display:flex;align-items:baseline;gap:8px;margin-top:18px;">
+            <span style="font-size:16px;font-weight:600;color:#e3eaf3;">SFTP</span>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#5a6878;">russh-sftp</span>
+          </div>
+          <p style="margin:8px 0 0 0;font-size:13.5px;line-height:1.65;color:#93a1b3;text-wrap:pretty;">File browser over your existing SSH hosts — one click from any terminal session.</p>
+        </div>
+        <div style="border:1px solid #1c2531;border-radius:12px;background:#0d121a;padding:24px;" style-hover="border-color:rgba(232,165,76,0.4);">
+          <div style="display:flex;width:36px;height:36px;align-items:center;justify-content:center;border-radius:8px;background:rgba(232,165,76,0.1);font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:#e8a54c;">⇅</div>
+          <div style="display:flex;align-items:baseline;gap:8px;margin-top:18px;">
+            <span style="font-size:16px;font-weight:600;color:#e3eaf3;">FTP</span>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#5a6878;">suppaftp</span>
+          </div>
+          <p style="margin:8px 0 0 0;font-size:13.5px;line-height:1.65;color:#93a1b3;text-wrap:pretty;">Plain FTP for the legacy boxes you can't decommission yet.</p>
+        </div>
+        <div style="border:1px solid #1c2531;border-radius:12px;background:#0d121a;padding:24px;" style-hover="border-color:rgba(183,138,247,0.4);">
+          <div style="display:flex;width:36px;height:36px;align-items:center;justify-content:center;border-radius:8px;background:rgba(183,138,247,0.1);font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:#b78af7;">⌁</div>
+          <div style="display:flex;align-items:baseline;gap:8px;margin-top:18px;">
+            <span style="font-size:16px;font-weight:600;color:#e3eaf3;">Serial</span>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#5a6878;">serialport</span>
+          </div>
+          <p style="margin:8px 0 0 0;font-size:13.5px;line-height:1.65;color:#93a1b3;text-wrap:pretty;">COM ports at any baud rate — bench rigs, switches, embedded consoles.</p>
+        </div>
+      </div>
+
+      <!-- why in-process -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:48px;margin-top:84px;">
+        <div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:0.18em;color:#5a6878;">why in-process</div>
+          <h2 style="margin:16px 0 0 0;font-size:36px;font-weight:600;letter-spacing:-0.022em;color:#e3eaf3;">One exe. The whole client.</h2>
+          <div style="display:flex;flex-direction:column;gap:15px;margin-top:28px;">
+            <div style="display:flex;gap:12px;font-size:14.5px;line-height:1.65;color:#93a1b3;"><span style="font-family:'JetBrains Mono',monospace;color:#3ecf8e;">✓</span><span><span style="font-weight:500;color:#e3eaf3;">Single process.</span> Every protocol is a Rust crate compiled into dshh.exe. Nothing spawned, nothing on PATH.</span></div>
+            <div style="display:flex;gap:12px;font-size:14.5px;line-height:1.65;color:#93a1b3;"><span style="font-family:'JetBrains Mono',monospace;color:#3ecf8e;">✓</span><span><span style="font-weight:500;color:#e3eaf3;">Saved profiles.</span> Grouped connections with duplicate and quick reconnect — not a PowerShell history.</span></div>
+            <div style="display:flex;gap:12px;font-size:14.5px;line-height:1.65;color:#93a1b3;"><span style="font-family:'JetBrains Mono',monospace;color:#3ecf8e;">✓</span><span><span style="font-weight:500;color:#e3eaf3;">Tabs + split pane.</span> Terminals stay mounted across tab switches; buffers survive.</span></div>
+            <div style="display:flex;gap:12px;font-size:14.5px;line-height:1.65;color:#93a1b3;"><span style="font-family:'JetBrains Mono',monospace;color:#3ecf8e;">✓</span><span><span style="font-weight:500;color:#e3eaf3;">Compose + broadcast.</span> Quick command chips, a Ctrl+K compose bar, and one-keystroke broadcast to every connected host.</span></div>
+          </div>
+        </div>
+        <div style="border:1px solid #1c2531;border-radius:12px;background:#070a0f;overflow:hidden;align-self:start;">
+          <div style="border-bottom:1px solid #1c2531;padding:9px 14px;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#5a6878;">task manager — before / after</div>
+          <div style="padding:20px;font-family:'JetBrains Mono',monospace;font-size:12.5px;line-height:2;">
+            <div style="color:#5a6878;"># the usual stack</div>
+            <div style="color:#93a1b3;text-decoration:line-through;text-decoration-color:#f26d78;">putty.exe&nbsp;&nbsp;&nbsp;&nbsp;pageant.exe&nbsp;&nbsp;&nbsp;plink.exe</div>
+            <div style="color:#93a1b3;text-decoration:line-through;text-decoration-color:#f26d78;">psftp.exe&nbsp;&nbsp;&nbsp;&nbsp;ftp.exe&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ssh.exe</div>
+            <div style="margin-top:14px;color:#5a6878;"># dshh</div>
+            <div style="color:#3ecf8e;">dshh.exe<span style="color:#5a6878;">&nbsp;&nbsp;← ssh · sftp · ftp · serial</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ DOWNLOAD + UPDATES ============ -->
+  <div id="dsh-download" data-screen-label="Download and updates" style="border-top:1px solid #131a24;">
+    <div style="max-width:1200px;margin:0 auto;padding:84px 24px;">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:0.18em;color:#5a6878;">download</div>
+      <h2 style="margin:16px 0 0 0;font-size:36px;font-weight:600;letter-spacing:-0.022em;color:#e3eaf3;">Get Dshh for Windows</h2>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:20px;margin-top:40px;">
+        <div style="border:1px solid #1c2531;border-radius:14px;background:#0d121a;padding:28px;">
+          <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;">
+            <span style="border:1px solid rgba(91,140,255,0.3);border-radius:6px;background:rgba(91,140,255,0.1);padding:2px 9px;font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;color:#5b8cff;">v0.1.0</span>
+            <span style="border-radius:6px;background:rgba(62,207,142,0.1);padding:2px 9px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#3ecf8e;">latest</span>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#5a6878;">jul 2026</span>
+          </div>
+          <div style="margin-top:18px;font-size:21px;font-weight:600;letter-spacing:-0.01em;color:#e3eaf3;">Dshh 0.1.0 — portable</div>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:16px;border:1px solid #1c2531;border-radius:8px;background:#070a0f;padding:12px 14px;font-family:'JetBrains Mono',monospace;font-size:11.5px;">
+            <span onClick="{{ openRelease }}" style="color:#7ca4ff;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">↓ Dshh-0.1.0-portable-win64.zip</span>
+            <span style="flex-shrink:0;color:#5a6878;">win64</span>
+          </div>
+          <div style="margin-top:12px;font-family:'JetBrains Mono',monospace;font-size:11px;line-height:1.9;color:#5a6878;">unzip → run dshh.exe · no installer, no admin<br>uninstall = delete the folder</div>
+          <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:22px;">
+            <span onClick="{{ openRelease }}" style="display:inline-flex;align-items:center;gap:8px;background:#5b8cff;border-radius:8px;padding:11px 18px;font-size:13.5px;font-weight:500;color:#ffffff;cursor:pointer;" style-hover="background:#7ca4ff;">↓ Download zip</span>
+            <span onClick="{{ openReleases }}" style="display:inline-flex;align-items:center;border:1px solid #2a3646;border-radius:8px;padding:11px 16px;font-size:13.5px;color:#93a1b3;cursor:pointer;" style-hover="color:#e3eaf3;">All releases ↗</span>
+            <span onClick="{{ copyLink }}" style="display:inline-flex;align-items:center;border:1px solid #2a3646;border-radius:8px;padding:11px 16px;font-family:'JetBrains Mono',monospace;font-size:11.5px;color:#93a1b3;cursor:pointer;" style-hover="color:#e3eaf3;">{{ copyLabel }}</span>
+          </div>
+          <div style="margin-top:16px;font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#38465a;">{{ liveNote }}</div>
+        </div>
+        <div style="border:1px solid #1c2531;border-radius:14px;padding:28px;">
+          <div style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:0.18em;color:#5a6878;">updates</div>
+          <div style="margin-top:14px;font-size:21px;font-weight:600;letter-spacing:-0.01em;color:#e3eaf3;">You'll know when there's a new build</div>
+          <div style="margin-top:14px;font-family:'JetBrains Mono',monospace;font-size:11.5px;line-height:2.1;color:#93a1b3;">
+            <div><span style="color:#5b8cff;">01</span>&nbsp; on launch, dshh checks GitHub Releases</div>
+            <div><span style="color:#5b8cff;">02</span>&nbsp; compares the tag against the running build</div>
+            <div><span style="color:#5b8cff;">03</span>&nbsp; newer? a quiet in-app notification — your call</div>
+          </div>
+          <div style="margin-top:20px;border:1px solid #1c2531;border-radius:12px;background:#0d121a;box-shadow:0 24px 64px -16px rgba(4,10,20,0.8);padding:14px;max-width:360px;min-height:86px;box-sizing:border-box;">
+            <sc-if value="{{ demoIdle }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex;gap:11px;align-items:center;">
+                <div style="display:flex;width:28px;height:28px;flex-shrink:0;align-items:center;justify-content:center;border-radius:7px;background:rgba(62,207,142,0.1);font-family:'JetBrains Mono',monospace;font-size:12px;color:#3ecf8e;">✓</div>
+                <div>
+                  <div style="font-size:13px;font-weight:600;color:#e3eaf3;">You're up to date</div>
+                  <div style="margin-top:2px;font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#5a6878;">dshh 0.1.0 · checked on launch</div>
+                </div>
+              </div>
+            </sc-if>
+            <sc-if value="{{ demoChecking }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex;gap:11px;align-items:center;">
+                <div style="display:flex;width:28px;height:28px;flex-shrink:0;align-items:center;justify-content:center;border-radius:7px;border:1px solid #2a3646;font-size:12px;color:#5b8cff;"><span style="display:inline-block;width:12px;height:12px;border:2px solid #1c2531;border-top-color:#5b8cff;border-radius:99px;animation:spin 0.8s linear infinite;"></span></div>
+                <div>
+                  <div style="font-size:13px;font-weight:600;color:#e3eaf3;">Checking for updates…</div>
+                  <div style="margin-top:2px;font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#5a6878;">GET api.github.com/…/releases/latest</div>
+                </div>
+              </div>
+            </sc-if>
+            <sc-if value="{{ demoAvailable }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex;gap:11px;">
+                <div style="display:flex;width:28px;height:28px;flex-shrink:0;align-items:center;justify-content:center;border-radius:7px;border:1px solid rgba(91,140,255,0.3);background:rgba(91,140,255,0.1);font-family:'JetBrains Mono',monospace;font-size:12px;color:#5b8cff;">↓</div>
+                <div style="min-width:0;flex:1;">
+                  <div style="display:flex;align-items:center;justify-content:space-between;">
+                    <span style="font-size:13px;font-weight:600;color:#e3eaf3;">Update available</span>
+                    <span onClick="{{ resetDemo }}" style="font-size:11px;color:#5a6878;cursor:pointer;">✕</span>
+                  </div>
+                  <div style="margin-top:2px;font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#5a6878;">dshh 0.2.0 · released today</div>
+                  <div style="display:flex;align-items:center;gap:8px;margin-top:10px;">
+                    <span onClick="{{ startDownload }}" style="background:#5b8cff;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:500;color:#ffffff;cursor:pointer;" style-hover="background:#7ca4ff;">Download</span>
+                    <span onClick="{{ goChangelog }}" style="border-radius:6px;padding:5px 10px;font-size:12px;color:#93a1b3;cursor:pointer;" style-hover="color:#e3eaf3;">Changelog</span>
+                  </div>
+                </div>
+              </div>
+            </sc-if>
+            <sc-if value="{{ demoDownloading }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex;gap:11px;">
+                <div style="display:flex;width:28px;height:28px;flex-shrink:0;align-items:center;justify-content:center;border-radius:7px;border:1px solid rgba(91,140,255,0.3);background:rgba(91,140,255,0.1);font-family:'JetBrains Mono',monospace;font-size:12px;color:#5b8cff;">↓</div>
+                <div style="min-width:0;flex:1;">
+                  <div style="font-size:13px;font-weight:600;color:#e3eaf3;">Downloading dshh 0.2.0</div>
+                  <div style="margin-top:10px;height:4px;border-radius:99px;background:#131a24;overflow:hidden;"><div style="width:{{ progressPct }}%;height:100%;border-radius:99px;background:#5b8cff;"></div></div>
+                  <div style="display:flex;justify-content:space-between;margin-top:8px;font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#5a6878;"><span>Dshh-0.2.0-portable-win64.zip</span><span>{{ progressPct }}%</span></div>
+                </div>
+              </div>
+            </sc-if>
+            <sc-if value="{{ demoDone }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex;gap:11px;align-items:center;">
+                <div style="display:flex;width:28px;height:28px;flex-shrink:0;align-items:center;justify-content:center;border-radius:7px;background:rgba(62,207,142,0.1);font-family:'JetBrains Mono',monospace;font-size:12px;color:#3ecf8e;">✓</div>
+                <div style="min-width:0;flex:1;">
+                  <div style="font-size:13px;font-weight:600;color:#e3eaf3;">Ready — dshh 0.2.0 downloaded</div>
+                  <div style="margin-top:2px;font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#5a6878;">saved next to dshh.exe · restart to apply</div>
+                </div>
+              </div>
+            </sc-if>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;margin-top:16px;">
+            <sc-if value="{{ demoCanSimulate }}" hint-placeholder-val="{{ true }}">
+              <span onClick="{{ simulate }}" style="display:inline-flex;align-items:center;gap:7px;border:1px solid #2a3646;border-radius:8px;padding:8px 14px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#93a1b3;cursor:pointer;" style-hover="color:#e3eaf3;border-color:#38465a;">▶ simulate update check</span>
+            </sc-if>
+            <sc-if value="{{ demoDone }}" hint-placeholder-val="{{ false }}">
+              <span onClick="{{ resetDemo }}" style="display:inline-flex;align-items:center;gap:7px;border:1px solid #2a3646;border-radius:8px;padding:8px 14px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#93a1b3;cursor:pointer;" style-hover="color:#e3eaf3;">↺ replay demo</span>
+            </sc-if>
+          </div>
+          <div style="margin-top:14px;font-size:12.5px;line-height:1.6;color:#5a6878;text-wrap:pretty;">No background service, nothing silent. This page reads the same feed — it always shows the newest release.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ CHANGELOG ============ -->
+  <div id="dsh-changelog" data-screen-label="Changelog" style="border-top:1px solid #131a24;">
+    <div style="max-width:1200px;margin:0 auto;padding:84px 24px;">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:0.18em;color:#5a6878;">changelog</div>
+      <h2 style="margin:16px 0 0 0;font-size:36px;font-weight:600;letter-spacing:-0.022em;color:#e3eaf3;">Release history</h2>
+      <div style="display:flex;flex-wrap:wrap;gap:20px;margin-top:40px;padding-top:28px;border-top:1px solid #1c2531;">
+        <div style="flex:0 0 160px;">
+          <div style="display:flex;align-items:center;gap:8px;"><span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:#5b8cff;">v0.1.0</span><span style="border-radius:5px;background:rgba(62,207,142,0.1);padding:1px 7px;font-family:'JetBrains Mono',monospace;font-size:10px;color:#3ecf8e;">latest</span></div>
+          <div style="margin-top:4px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#5a6878;">jul 2026</div>
+        </div>
+        <div style="flex:1 1 320px;min-width:0;">
+          <div style="font-size:16.5px;font-weight:600;color:#e3eaf3;">Initial release</div>
+          <ul style="margin:12px 0 0 0;padding:0 0 0 18px;display:flex;flex-direction:column;gap:6px;font-size:14px;line-height:1.65;color:#93a1b3;">
+            <li>SSH, SFTP, FTP and serial — all in-process (russh · russh-sftp · suppaftp · serialport)</li>
+            <li>Tabbed workspace with split pane; terminals survive tab switches</li>
+            <li>Saved connection profiles with groups</li>
+            <li>Quick command chips, Ctrl+K compose bar, broadcast to all connected hosts</li>
+            <li>Buffer search (Ctrl+F), session logging, ANSI highlight rules</li>
+            <li>SSH port forwarding (tunnels)</li>
+          </ul>
+        </div>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:20px;margin-top:28px;padding-top:28px;border-top:1px solid #1c2531;">
+        <div style="flex:0 0 160px;font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:#5a6878;">unreleased</div>
+        <div style="flex:1 1 320px;min-width:0;font-size:14px;line-height:1.8;color:#5a6878;">known-hosts verification (host keys are currently trust-on-first-use) · in-app update download</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ DOCS ============ -->
+  <div id="dsh-docs" data-screen-label="Docs" style="border-top:1px solid #131a24;">
+    <div style="max-width:1200px;margin:0 auto;padding:84px 24px;">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:0.18em;color:#5a6878;">docs</div>
+      <h2 style="margin:16px 0 0 0;font-size:36px;font-weight:600;letter-spacing:-0.022em;color:#e3eaf3;">Up and running in 30 seconds</h2>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:20px;margin-top:40px;">
+        <div style="border:1px solid #1c2531;border-radius:14px;background:#0d121a;padding:28px;">
+          <div style="font-size:16px;font-weight:600;color:#e3eaf3;">Quickstart</div>
+          <div style="margin-top:18px;display:flex;flex-direction:column;gap:14px;font-family:'JetBrains Mono',monospace;font-size:12px;line-height:1.7;">
+            <div style="display:flex;gap:12px;"><span style="color:#5b8cff;">01</span><span style="color:#93a1b3;">download <span style="color:#e3eaf3;">Dshh-0.1.0-portable-win64.zip</span></span></div>
+            <div style="display:flex;gap:12px;"><span style="color:#5b8cff;">02</span><span style="color:#93a1b3;">extract anywhere — a USB stick works</span></div>
+            <div style="display:flex;gap:12px;"><span style="color:#5b8cff;">03</span><span style="color:#93a1b3;">run <span style="color:#e3eaf3;">dshh.exe</span> and add your first host with <span style="border:1px solid #2a3646;border-radius:5px;background:#131a24;padding:1px 7px;font-size:10.5px;color:#e3eaf3;">+</span></span></div>
+          </div>
+          <div style="margin-top:20px;border-top:1px solid #1c2531;padding-top:16px;font-size:12.5px;line-height:1.6;color:#5a6878;">No installer, no admin rights, no services. Windows SmartScreen may ask once — the exe is unsigned for now.</div>
+        </div>
+        <div style="border:1px solid #1c2531;border-radius:14px;background:#0d121a;padding:28px;">
+          <div style="font-size:16px;font-weight:600;color:#e3eaf3;">Keyboard &amp; commands</div>
+          <div style="margin-top:18px;display:flex;flex-direction:column;">
+            <div style="display:flex;align-items:center;gap:14px;padding:9px 0;border-bottom:1px solid #131a24;">
+              <span style="flex:0 0 92px;border:1px solid #2a3646;border-radius:5px;background:#131a24;padding:3px 8px;text-align:center;font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#e3eaf3;">Ctrl + K</span>
+              <span style="font-size:13.5px;color:#93a1b3;">focus the compose bar from anywhere</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:14px;padding:9px 0;border-bottom:1px solid #131a24;">
+              <span style="flex:0 0 92px;border:1px solid #2a3646;border-radius:5px;background:#131a24;padding:3px 8px;text-align:center;font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#e3eaf3;">Ctrl + F</span>
+              <span style="font-size:13.5px;color:#93a1b3;">search the terminal buffer</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:14px;padding:9px 0;border-bottom:1px solid #131a24;">
+              <span style="flex:0 0 92px;border:1px solid #2a3646;border-radius:5px;background:#131a24;padding:3px 8px;text-align:center;font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#e3eaf3;">Enter</span>
+              <span style="font-size:13.5px;color:#93a1b3;">run the composed command in the active tab</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:14px;padding:9px 0;">
+              <span style="flex:0 0 92px;border:1px solid #2a3646;border-radius:5px;background:#131a24;padding:3px 8px;text-align:center;font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#e3eaf3;">broadcast</span>
+              <span style="font-size:13.5px;color:#93a1b3;">toggle to send one command to every connected host</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ FOOTER ============ -->
+  <div style="border-top:1px solid #131a24;">
+    <div style="max-width:1200px;margin:0 auto;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:14px;padding:32px 24px;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div style="display:flex;width:22px;height:22px;align-items:center;justify-content:center;border-radius:5px;border:1px solid rgba(91,140,255,0.3);background:rgba(91,140,255,0.1);font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:600;color:#5b8cff;">&gt;_</div>
+        <span style="font-size:13px;color:#93a1b3;">dshh — in-process multi-protocol client</span>
+      </div>
+      <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#5a6878;">win64 · tauri 2 + react + rust · no ssh.exe</span>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{
+  &quot;githubRepo&quot;: { &quot;editor&quot;: &quot;text&quot;, &quot;default&quot;: &quot;&quot;, &quot;tsType&quot;: &quot;string&quot;, &quot;section&quot;: &quot;Release feed&quot; },
+  &quot;layout&quot;: { &quot;editor&quot;: &quot;enum&quot;, &quot;options&quot;: [&quot;auto&quot;, &quot;desktop&quot;, &quot;mobile&quot;], &quot;default&quot;: &quot;auto&quot;, &quot;tsType&quot;: &quot;string&quot;, &quot;section&quot;: &quot;Viewport&quot; }
+}">
+class Component extends DCLogic {
+  state = {
+    vw: typeof window !== "undefined" ? window.innerWidth : 1280,
+    menuOpen: false,
+    activeTab: "ssh",
+    demo: "idle",
+    progress: 0,
+    copied: false,
+    live: null,
+    liveErr: null,
+    activeSection: "",
+  };
+
+  componentDidMount() {
+    this._onResize = () => this.setState({ vw: window.innerWidth });
+    window.addEventListener("resize", this._onResize);
+    this._onScroll = () => {
+      if (this._embed()) return;
+      const ids = ["dsh-features", "dsh-download", "dsh-changelog", "dsh-docs"];
+      let current = "";
+      for (const id of ids) {
+        const el = document.getElementById(id);
+        if (el && el.getBoundingClientRect().top <= 130) current = id;
+      }
+      if (current !== this.state.activeSection) this.setState({ activeSection: current });
+    };
+    window.addEventListener("scroll", this._onScroll, { passive: true });
+    const repo = this._repo();
+    if (repo && repo.includes("/")) {
+      fetch("https://api.github.com/repos/" + repo + "/releases/latest")
+        .then((r) => (r.ok ? r.json() : Promise.reject(new Error("HTTP " + r.status))))
+        .then((j) => {
+          const zip = (j.assets || []).find((a) => /\.zip$/i.test(a.name || ""));
+          this.setState({
+            live: {
+              tag: j.tag_name || "?",
+              date: (j.published_at || "").slice(0, 10),
+              zipUrl: zip ? zip.browser_download_url : j.html_url,
+            },
+          });
+        })
+        .catch((e) => this.setState({ liveErr: String((e && e.message) || e) }));
+    }
+  }
+
+  componentWillUnmount() {
+    window.removeEventListener("resize", this._onResize);
+    window.removeEventListener("scroll", this._onScroll);
+    clearTimeout(this._demoT);
+    clearInterval(this._demoI);
+    clearTimeout(this._copyT);
+  }
+
+  _repo() {
+    return (this.props.githubRepo || "").trim();
+  }
+  _embed() {
+    const l = this.props.layout;
+    return l === "desktop" || l === "mobile";
+  }
+  _isMobile() {
+    return this._embed() ? this.props.layout === "mobile" : this.state.vw < 768;
+  }
+  _go(id) {
+    this.setState({ menuOpen: false });
+    if (this._embed()) return;
+    const el = document.getElementById(id);
+    if (!el) return;
+    const y = el.getBoundingClientRect().top + window.scrollY - 72;
+    window.scrollTo({ top: y, behavior: "smooth" });
+  }
+  _releaseUrl() {
+    const repo = this._repo();
+    if (this.state.live) return this.state.live.zipUrl;
+    return repo ? "https://github.com/" + repo + "/releases/latest" : "";
+  }
+  _copy() {
+    const url = this._releaseUrl() || "https://github.com/<user>/dshh/releases/latest";
+    const done = () => {
+      this.setState({ copied: true });
+      clearTimeout(this._copyT);
+      this._copyT = setTimeout(() => this.setState({ copied: false }), 1600);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(done, done);
+    else done();
+  }
+  _simulate() {
+    clearTimeout(this._demoT);
+    clearInterval(this._demoI);
+    this.setState({ demo: "checking", progress: 0 });
+    this._demoT = setTimeout(() => this.setState({ demo: "available" }), 1100);
+  }
+  _startDownload() {
+    this.setState({ demo: "downloading", progress: 0 });
+    clearInterval(this._demoI);
+    this._demoI = setInterval(() => {
+      this.setState((s) => {
+        const p = Math.min(100, s.progress + 1.5 + Math.random() * 3.5);
+        if (p >= 100) {
+          clearInterval(this._demoI);
+          return { progress: 100, demo: "done" };
+        }
+        return { progress: p };
+      });
+    }, 55);
+  }
+  _resetDemo() {
+    clearTimeout(this._demoT);
+    clearInterval(this._demoI);
+    this.setState({ demo: "idle", progress: 0 });
+  }
+
+  renderVals() {
+    const isMobile = this._isMobile();
+    const { menuOpen, activeTab, demo, progress, copied, live, liveErr, activeSection } = this.state;
+    const repo = this._repo();
+    const liveNote = !repo
+      ? "release feed: set the githubRepo tweak (user/repo) to pull the latest GitHub release, live"
+      : liveErr
+        ? "github: " + liveErr
+        : live
+          ? "latest on github: " + live.tag + " · " + live.date
+          : "checking github releases…";
+    const on = "#0a0e14", off = "#0d121a", txtOn = "#e3eaf3", txtOff = "#93a1b3";
+    return {
+      isMobile,
+      isDesktop: !isMobile,
+      menuOpen,
+      mobileMenuOpen: isMobile && menuOpen,
+      toggleMenu: () => this.setState((s) => ({ menuOpen: !s.menuOpen })),
+      goFeatures: () => this._go("dsh-features"),
+      goDownload: () => this._go("dsh-download"),
+      goChangelog: () => this._go("dsh-changelog"),
+      goDocs: () => this._go("dsh-docs"),
+      onFeatures: activeSection === "dsh-features",
+      onDownload: activeSection === "dsh-download",
+      onChangelog: activeSection === "dsh-changelog",
+      onDocs: activeSection === "dsh-docs",
+      openGithub: () => window.open(repo ? "https://github.com/" + repo : "https://github.com", "_blank"),
+      openRelease: () => {
+        const u = this._releaseUrl();
+        if (u) window.open(u, "_blank");
+      },
+      openReleases: () => window.open(repo ? "https://github.com/" + repo + "/releases" : "https://github.com", "_blank"),
+      copyLink: () => this._copy(),
+      copyLabel: copied ? "✓ copied" : "copy link",
+      tabSsh: activeTab === "ssh",
+      tabSftp: activeTab === "sftp",
+      tabSerial: activeTab === "serial",
+      setTabSsh: () => this.setState({ activeTab: "ssh" }),
+      setTabSftp: () => this.setState({ activeTab: "sftp" }),
+      setTabSerial: () => this.setState({ activeTab: "serial" }),
+      sshTabBg: activeTab === "ssh" ? on : off,
+      sftpTabBg: activeTab === "sftp" ? on : off,
+      serialTabBg: activeTab === "serial" ? on : off,
+      sshTabTxt: activeTab === "ssh" ? txtOn : txtOff,
+      sftpTabTxt: activeTab === "sftp" ? txtOn : txtOff,
+      serialTabTxt: activeTab === "serial" ? txtOn : txtOff,
+      rowSshBg: activeTab === "ssh" ? "#1a2330" : "transparent",
+      rowSftpBg: activeTab === "sftp" ? "#1a2330" : "transparent",
+      rowSerialBg: activeTab === "serial" ? "#1a2330" : "transparent",
+      demoIdle: demo === "idle",
+      demoChecking: demo === "checking",
+      demoAvailable: demo === "available",
+      demoDownloading: demo === "downloading",
+      demoDone: demo === "done",
+      demoCanSimulate: demo === "idle",
+      simulate: () => this._simulate(),
+      startDownload: () => this._startDownload(),
+      resetDemo: () => this._resetDemo(),
+      progressPct: Math.round(progress),
+      liveNote,
+    };
+  }
+}
+</script>
+</body>
+</html>

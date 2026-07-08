@@ -1,22 +1,36 @@
 # Dshh
 
 A modern, in-process multi-protocol connection client for Windows — **SSH**, **SFTP**,
-**FTP**, and **Serial** — built with **Tauri 2 + React + Rust**.
+**FTP**, **Serial**, and a built-in **Local terminal** (cmd / PowerShell) — built with
+**Tauri 2 + React + Rust**.
 
 ## Why in-process?
 
 Every protocol is implemented *inside this app's own executable* using Rust crates:
 
-| Protocol | Crate        |
-|----------|--------------|
-| SSH      | `russh`      |
-| SFTP     | `russh-sftp` |
-| FTP      | `suppaftp`   |
-| Serial   | `serialport` |
+| Protocol       | Crate                   |
+|----------------|-------------------------|
+| SSH            | `russh`                 |
+| SFTP           | `russh-sftp`            |
+| FTP            | `suppaftp`              |
+| Serial         | `serialport`            |
+| Local terminal | `portable-pty` (ConPTY) |
 
 No child process named `ssh.exe` / `sftp.exe` / `ftp.exe` is ever spawned — the app is
 a single process (`dshh.exe`). This also makes it far nicer to use than raw PowerShell:
 tabbed sessions, saved connection profiles, a real xterm terminal, and a file browser.
+
+## Features
+
+- **Multi-protocol tabs** — SSH, SFTP, FTP, and Serial from one window.
+- **Local terminal** — launch **cmd**, **Windows PowerShell**, and (if installed)
+  **PowerShell 7 / Git Bash / WSL** in an embedded tab. Open a one-off from the sidebar
+  `▾` menu, or save a reusable **Local** profile. **Run as Administrator** elevates through
+  UAC and opens in its own window (an elevated shell can't share this app's console).
+- **Real terminal** — xterm.js with buffer search (`Ctrl+F`), keyword highlighting,
+  session recording, and save-to-file. Terminal size stays in lock-step with the remote
+  PTY, so cursor editing (`←/→`, history) never smears.
+- **SFTP file browser**, **port forwarding** (`ssh -L` tunnels), and saved-session sync.
 
 ## Prerequisites
 
@@ -44,16 +58,41 @@ npm run tauri:dev
 npm run tauri:build
 ```
 
+## Release a portable `.exe`
+
+The build produces a self-contained `dshh.exe` — it only needs the WebView2 runtime,
+which ships with Windows 10/11. Steps:
+
+1. **Bump the version** in all three files (keep them in sync):
+   `package.json`, `src-tauri/tauri.conf.json` (`version`), and `src-tauri/Cargo.toml`.
+2. **Build** from a Developer PowerShell for VS:
+   ```powershell
+   npm run tauri:build
+   ```
+3. **Grab the artifacts** under `src-tauri/target/release/`:
+   - `dshh.exe` — the **portable** single-file build (copy-and-run, no install).
+   - `bundle/nsis/Dshh_<ver>_x64-setup.exe` — optional installer.
+   - `bundle/msi/Dshh_<ver>_x64_en-US.msi` — optional MSI.
+4. **Publish a GitHub Release**: tag `v<ver>`, upload `dshh.exe` (+ installer), write the
+   changelog. Distributables are kept out of the repo (see `/share` in `.gitignore`) —
+   host them on Releases, not in git.
+   ```powershell
+   gh release create v0.1.0 src-tauri/target/release/dshh.exe --title "Dshh v0.1.0" --notes "..."
+   ```
+5. Point the **website** download button at the new Release asset URL.
+
 ## Project layout
 
 ```
 src/                 React frontend (Vite + Tailwind + xterm.js)
-  components/         Sidebar, TabBar, Workspace, TerminalView, FileBrowser, ConnectionModal
+  components/         Sidebar, TabBar, Workspace, TerminalView, FileBrowser,
+                     ConnectionModal, LocalLauncher
   lib/               types, Tauri API wrappers, utils
   store.ts           Zustand state (+ localStorage for saved connections)
 src-tauri/src/       Rust backend
-  ssh.rs sftp.rs ftp.rs serial.rs   one Tauri command module per protocol
+  ssh.rs sftp.rs ftp.rs serial.rs local.rs   one Tauri command module per protocol
   lib.rs             shared types, AppState, command registration
+website/             Marketing + update/download site (Vite + React, static SPA)
 ```
 
 ## Security note

@@ -25,6 +25,10 @@ import {
   serialOpen,
   serialWrite,
   serialClose,
+  localOpen,
+  localWrite,
+  localResize,
+  localClose,
   logStart,
   logStop,
   saveTextFile,
@@ -58,6 +62,11 @@ export function TerminalView({
   // One "life" per mount; async callbacks compare against the current one so
   // a StrictMode remount or a stale connect can't leak a live connection.
   const lifeRef = useRef<{ dead: boolean }>({ dead: false });
+  // Last terminal size pushed to the backend PTY. Lets every path that re-fits
+  // the grid (font load, container resize, reconnect) keep the remote shell's
+  // wrap width in lock-step with what xterm actually renders, and guards
+  // against redundant window-change spam.
+  const lastSizeRef = useRef<{ cols: number; rows: number }>({ cols: 0, rows: 0 });
 
   const setStatus = useStore((s) => s.setSessionStatus);
   const openSession = useStore((s) => s.openSession);
@@ -73,6 +82,9 @@ export function TerminalView({
   const [tunnelsOpen, setTunnelsOpen] = useState(false);
 
   const isSsh = session.protocol === "ssh";
+  const isLocal = session.protocol === "local";
+  // Both SSH and local run over a PTY, so both need window-size sync.
+  const usesPty = isSsh || isLocal;
   const connected = session.status === "connected";
   const dropped = session.status === "closed" || session.status === "error";
   const runningTunnels = useMemo(
@@ -93,6 +105,32 @@ export function TerminalView({
     };
   }, [settings.highlightEnabled, settings.highlightRules]);
 
+  // Push the current grid size to the backend PTY. A stale width is what makes
+  // line editing (←/→, backspace, history recall) smear across the wrong
+  // columns until the next fresh prompt. Only emits when the size changed and
+  // the grid is actually measured (a hidden split pane fits to 0×0).
+  const pushResize = () => {
+    const term = termRef.current;
+    if (!term || !backendId.current || !usesPty) return;
+    const { cols, rows } = term;
+    if (!cols || !rows) return;
+    if (cols === lastSizeRef.current.cols && rows === lastSizeRef.current.rows) return;
+    lastSizeRef.current = { cols, rows };
+    (isLocal ? localResize : sshResize)(backendId.current, cols, rows).catch(() => {});
+  };
+
+  const syncSize = () => {
+    fitRef.current?.fit();
+    pushResize();
+  };
+
+  // Single keystroke/paste sink so every transport writes through one place.
+  const writeBackend = (data: string) => {
+    const id = backendId.current;
+    if (!id) return;
+    (isSsh ? sshWrite : isLocal ? localWrite : serialWrite)(id, data);
+  };
+
   const connect = async () => {
     const term = termRef.current;
     const life = lifeRef.current;
@@ -100,44 +138,62 @@ export function TerminalView({
     connectingRef.current = true;
     setStatus(session.id, "connecting");
     try {
-      term.writeln(`\x1b[90m· connecting to ${conn.name} …\x1b[0m`);
+      term.writeln(
+        `\x1b[90m· ${isLocal ? "starting" : "connecting to"} ${conn.name} …\x1b[0m`
+      );
       const decoder = new TextDecoder();
       const onData = (bytes: Uint8Array) => {
         const text = decoder.decode(bytes, { stream: true });
         const { enabled, compiled } = rulesRef.current;
         term.write(enabled && compiled.length ? applyHighlights(text, compiled) : text);
       };
+      // Remote hangup / network drop / server-side exit, or a local shell that
+      // ran `exit`. The UI then offers a reconnect (respawn for local).
+      const onClosed = () => {
+        if (life.dead || !backendId.current) return;
+        backendId.current = null;
+        setRecording(false);
+        unregisterTerminal(session.id);
+        useStore.getState().setSessionStatus(session.id, "closed");
+        term.writeln(`\r\n\x1b[90m· ${isLocal ? "shell exited" : "connection closed"}\x1b[0m`);
+      };
 
       const id = isSsh
-        ? await sshConnect(conn, onData, () => {
-            // Remote hangup / network drop / server-side exit.
-            if (life.dead || !backendId.current) return;
-            backendId.current = null;
-            setRecording(false);
-            unregisterTerminal(session.id);
-            useStore.getState().setSessionStatus(session.id, "closed");
-            term.writeln(`\r\n\x1b[90m· connection closed\x1b[0m`);
-          })
-        : await serialOpen(conn, onData);
+        ? await sshConnect(conn, onData, onClosed)
+        : isLocal
+          ? await localOpen(
+              conn.shell ?? "cmd",
+              conn.cwd ?? null,
+              term.cols,
+              term.rows,
+              onData,
+              onClosed
+            )
+          : await serialOpen(conn, onData);
 
       if (life.dead) {
         // Component unmounted while the handshake was in flight.
-        (isSsh ? sshDisconnect(id) : serialClose(id)).catch(() => {});
+        (isSsh
+          ? sshDisconnect(id)
+          : isLocal
+            ? localClose(id)
+            : serialClose(id)
+        ).catch(() => {});
         return;
       }
 
       backendId.current = id;
       setStatus(session.id, "connected");
       registerTerminal(session.id, {
-        send: (d) => {
-          if (backendId.current) {
-            (isSsh ? sshWrite : serialWrite)(backendId.current, d);
-          }
-        },
+        send: (d) => writeBackend(d),
         focus: () => term.focus(),
       });
 
-      if (isSsh) sshResize(id, term.cols, term.rows).catch(() => {});
+      // Fresh backend PTY defaults to 80×24; force the first size push (the
+      // reset defeats pushResize's "unchanged" guard on reconnect). No-op for
+      // serial, which has no window size.
+      lastSizeRef.current = { cols: 0, rows: 0 };
+      pushResize();
 
       const st = useStore.getState().settings;
       if (st.autoLog && st.logDir) {
@@ -208,11 +264,7 @@ export function TerminalView({
     fitRef.current = fit;
     searchRef.current = search;
 
-    term.onData((d) => {
-      if (backendId.current) {
-        (isSsh ? sshWrite : serialWrite)(backendId.current, d);
-      }
-    });
+    term.onData((d) => writeBackend(d));
 
     term.attachCustomKeyEventHandler((e) => {
       if (e.type === "keydown" && e.ctrlKey && (e.key === "f" || e.key === "F")) {
@@ -222,20 +274,17 @@ export function TerminalView({
       return true;
     });
 
-    // Variable fonts can land after the first fit; re-measure once ready.
+    // Variable fonts can land after the first fit and change the cell metrics
+    // (and therefore the column count). Re-fit AND push the new size, or the
+    // remote PTY keeps wrapping at the pre-font width — the root cause of
+    // smeared line editing.
     document.fonts?.ready.then(() => {
-      if (!life.dead) fitRef.current?.fit();
+      if (!life.dead) syncSize();
     });
 
     connect();
 
-    const doFit = () => {
-      fit.fit();
-      if (backendId.current && isSsh) {
-        sshResize(backendId.current, term.cols, term.rows).catch(() => {});
-      }
-    };
-    const ro = new ResizeObserver(doFit);
+    const ro = new ResizeObserver(() => syncSize());
     ro.observe(containerRef.current);
 
     return () => {
@@ -245,7 +294,9 @@ export function TerminalView({
       if (backendId.current) {
         (isSsh
           ? sshDisconnect(backendId.current)
-          : serialClose(backendId.current)
+          : isLocal
+            ? localClose(backendId.current)
+            : serialClose(backendId.current)
         ).catch(() => {});
         backendId.current = null;
       }
@@ -354,7 +405,9 @@ export function TerminalView({
         <span className="shrink-0 font-mono text-[10.5px] text-ink-dim">
           {session.protocol === "serial"
             ? `${conn.serialPort} · ${conn.baudRate}`
-            : `${conn.username ? conn.username + "@" : ""}${conn.host}:${conn.port}`}
+            : session.protocol === "local"
+              ? `local · ${conn.shell ?? "shell"}`
+              : `${conn.username ? conn.username + "@" : ""}${conn.host}:${conn.port}`}
         </span>
         {note && (
           <span className="min-w-0 flex-1 truncate font-mono text-[10.5px] text-ink-dim">

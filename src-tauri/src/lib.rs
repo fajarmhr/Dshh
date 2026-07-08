@@ -1,4 +1,5 @@
 mod ftp;
+mod local;
 mod logs;
 mod serial;
 mod sftp;
@@ -54,6 +55,7 @@ pub struct AppState {
     pub sftp: Mutex<HashMap<String, sftp::SftpConn>>,
     pub ftp: Mutex<HashMap<String, ftp::FtpConn>>,
     pub serial: Mutex<HashMap<String, serial::SerialSession>>,
+    pub local: Mutex<HashMap<String, local::LocalSession>>,
     pub tunnels: Mutex<HashMap<String, tunnel::TunnelSession>>,
 }
 
@@ -77,6 +79,12 @@ pub fn run() {
             serial::serial_open,
             serial::serial_write,
             serial::serial_close,
+            local::local_list_shells,
+            local::local_open,
+            local::local_write,
+            local::local_resize,
+            local::local_close,
+            local::local_open_admin,
             sftp::sftp_connect,
             sftp::sftp_list,
             sftp::sftp_download,

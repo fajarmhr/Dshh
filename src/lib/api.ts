@@ -1,5 +1,5 @@
 import { invoke, Channel } from "@tauri-apps/api/core";
-import type { Connection, RemoteFile } from "./types";
+import type { Connection, LocalShell, RemoteFile } from "./types";
 
 /**
  * All backend calls funnel through here. Terminal-style byte streams
@@ -43,6 +43,35 @@ export async function serialOpen(conn: Connection, onData: ByteHandler): Promise
 }
 export const serialWrite = (id: string, data: string) => invoke("serial_write", { id, data });
 export const serialClose = (id: string) => invoke("serial_close", { id });
+
+// ---- Local terminal (cmd / PowerShell / … over a PTY) ----
+export const localListShells = () => invoke<LocalShell[]>("local_list_shells");
+export async function localOpen(
+  shell: string,
+  cwd: string | null,
+  cols: number,
+  rows: number,
+  onData: ByteHandler,
+  onClosed: (reason: string) => void
+): Promise<string> {
+  const closed = new Channel<string>();
+  closed.onmessage = onClosed;
+  return invoke<string>("local_open", {
+    shell,
+    cwd,
+    cols,
+    rows,
+    onData: byteChannel(onData),
+    onClosed: closed,
+  });
+}
+export const localWrite = (id: string, data: string) => invoke("local_write", { id, data });
+export const localResize = (id: string, cols: number, rows: number) =>
+  invoke("local_resize", { id, cols, rows });
+export const localClose = (id: string) => invoke("local_close", { id });
+/** Launch an elevated shell in a separate UAC window (Windows only). */
+export const localOpenAdmin = (shell: string, cwd: string | null) =>
+  invoke("local_open_admin", { shell, cwd });
 
 // ---- SFTP ----
 export const sftpConnect = (conn: Connection) => invoke<string>("sftp_connect", { conn });

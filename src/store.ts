@@ -72,6 +72,8 @@ const persistQuickCommands = (q: QuickCommand[]) =>
 
 interface AppState {
   connections: Connection[];
+  /** In-memory connections behind one-off local terminals; never persisted. */
+  transientConnections: Connection[];
   sessions: Session[];
   activeSessionId: string | null;
   /** Session shown in the right pane of a split view, or null when unsplit. */
@@ -87,6 +89,8 @@ interface AppState {
   duplicateConnection: (id: string) => Connection | undefined;
 
   openSession: (connectionId: string, title: string, protocol?: Protocol) => Session;
+  /** Open a one-off local shell tab backed by a transient connection. */
+  openLocalTerminal: (opts: { shell: string; label: string; cwd?: string }) => void;
   setSessionStatus: (id: string, status: SessionStatus, error?: string) => void;
   closeSession: (id: string) => void;
   setActiveSession: (id: string | null) => void;
@@ -103,6 +107,7 @@ interface AppState {
 
 export const useStore = create<AppState>((set, get) => ({
   connections: loadJson<Connection[]>(STORAGE_KEY) ?? [],
+  transientConnections: [],
   sessions: [],
   activeSessionId: null,
   splitSessionId: null,
@@ -160,6 +165,24 @@ export const useStore = create<AppState>((set, get) => ({
     return session;
   },
 
+  openLocalTerminal: ({ shell, label, cwd }) => {
+    // A one-off local terminal has no saved profile, so it rides on a transient
+    // connection kept only in memory. TerminalView reads `shell`/`cwd` from it.
+    const conn: Connection = { id: nanoid(), name: label, protocol: "local", shell, cwd };
+    const session: Session = {
+      id: nanoid(),
+      connectionId: conn.id,
+      protocol: "local",
+      title: label,
+      status: "connecting",
+    };
+    set({
+      transientConnections: [...get().transientConnections, conn],
+      sessions: [...get().sessions, session],
+      activeSessionId: session.id,
+    });
+  },
+
   setSessionStatus: (id, status, error) =>
     set({
       sessions: get().sessions.map((s) =>
@@ -168,6 +191,7 @@ export const useStore = create<AppState>((set, get) => ({
     }),
 
   closeSession: (id) => {
+    const closing = get().sessions.find((s) => s.id === id);
     const remaining = get().sessions.filter((s) => s.id !== id);
     const active =
       get().activeSessionId === id
@@ -176,7 +200,24 @@ export const useStore = create<AppState>((set, get) => ({
           : null
         : get().activeSessionId;
     const split = get().splitSessionId === id ? null : get().splitSessionId;
-    set({ sessions: remaining, activeSessionId: active, splitSessionId: split });
+    // Reap the transient connection behind a local terminal once nothing else
+    // references it, so the in-memory list doesn't grow without bound.
+    let transientConnections = get().transientConnections;
+    if (
+      closing &&
+      transientConnections.some((c) => c.id === closing.connectionId) &&
+      !remaining.some((s) => s.connectionId === closing.connectionId)
+    ) {
+      transientConnections = transientConnections.filter(
+        (c) => c.id !== closing.connectionId
+      );
+    }
+    set({
+      sessions: remaining,
+      activeSessionId: active,
+      splitSessionId: split,
+      transientConnections,
+    });
   },
 
   setActiveSession: (id) => {

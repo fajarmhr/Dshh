@@ -33,6 +33,7 @@ export default {
           sftp: "#3ecf8e",
           ftp: "#e8a54c",
           serial: "#b78af7",
+          local: "#5fd0c5",
         },
       },
       fontFamily: {

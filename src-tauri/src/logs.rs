@@ -4,12 +4,15 @@ use std::io::Write;
 use tauri::State;
 
 /// Find the logger handle for a session id across the protocols that stream
-/// terminal-style output (SSH and serial).
+/// terminal-style output (SSH, serial, and local shells).
 async fn logger_for(state: &AppState, id: &str) -> Option<Logger> {
     if let Some(s) = state.ssh.lock().await.get(id) {
         return Some(s.logger.clone());
     }
     if let Some(s) = state.serial.lock().await.get(id) {
+        return Some(s.logger.clone());
+    }
+    if let Some(s) = state.local.lock().await.get(id) {
         return Some(s.logger.clone());
     }
     None

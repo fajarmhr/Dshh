@@ -1,0 +1,10 @@
+# Dependencies
+node_modules
+
+# Build output
+dist
+
+# Logs & editor cruft
+*.log
+.DS_Store
+Thumbs.db
