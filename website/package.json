@@ -1,0 +1,16 @@
+{
+  "name": "dshh-website",
+  "private": true,
+  "version": "0.2.0",
+  "type": "module",
+  "description": "Marketing + update/download site for Dshh",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2",
+    "vite": "^6.0.5"
+  }
+}

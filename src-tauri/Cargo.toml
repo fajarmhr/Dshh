@@ -1,6 +1,6 @@
 [package]
 name = "dshh"
-version = "0.1.0"
+version = "0.2.0"
 description = "Multi-protocol connection client"
 authors = ["you"]
 edition = "2021"
