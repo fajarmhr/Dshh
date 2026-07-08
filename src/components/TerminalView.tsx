@@ -5,6 +5,7 @@ import { WebLinksAddon } from "@xterm/addon-web-links";
 import { SearchAddon } from "@xterm/addon-search";
 import { save as saveDialog } from "@tauri-apps/plugin-dialog";
 import {
+  ArrowLeftRight,
   ChevronDown,
   ChevronUp,
   Circle,
@@ -36,6 +37,7 @@ import {
 import { registerTerminal, unregisterTerminal } from "../lib/terminalRegistry";
 import { applyHighlights, compileRules, type CompiledRule } from "../lib/highlight";
 import { TunnelsModal } from "./TunnelsModal";
+import { ScpModal } from "./ScpModal";
 import type { Connection, Session } from "../lib/types";
 import { sanitizeFilename, timestamp } from "../lib/utils";
 
@@ -80,6 +82,7 @@ export function TerminalView({
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [tunnelsOpen, setTunnelsOpen] = useState(false);
+  const [scpOpen, setScpOpen] = useState(false);
 
   const isSsh = session.protocol === "ssh";
   const isLocal = session.protocol === "local";
@@ -438,6 +441,14 @@ export function TerminalView({
                   </span>
                 )}
               </button>
+              <button
+                onClick={() => setScpOpen(true)}
+                className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-ink-mid transition hover:bg-bg-hover hover:text-ink-hi active:scale-[0.97]"
+                title="Copy files over SCP"
+              >
+                <ArrowLeftRight size={14} />
+                SCP
+              </button>
               <div className="mx-1 h-4 w-px bg-edge" />
             </>
           )}
@@ -534,6 +545,8 @@ export function TerminalView({
       {tunnelsOpen && (
         <TunnelsModal conn={liveConn} onClose={() => setTunnelsOpen(false)} />
       )}
+
+      {scpOpen && <ScpModal conn={liveConn} onClose={() => setScpOpen(false)} />}
     </div>
   );
 }

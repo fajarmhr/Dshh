@@ -1,8 +1,8 @@
 # Dshh
 
 A modern, in-process multi-protocol connection client for Windows — **SSH**, **SFTP**,
-**FTP**, **Serial**, and a built-in **Local terminal** (cmd / PowerShell) — built with
-**Tauri 2 + React + Rust**.
+**SCP**, **FTP**, **Serial**, and a built-in **Local terminal** (cmd / PowerShell) — built
+with **Tauri 2 + React + Rust**.
 
 ## Why in-process?
 
@@ -12,6 +12,7 @@ Every protocol is implemented *inside this app's own executable* using Rust crat
 |----------------|-------------------------|
 | SSH            | `russh`                 |
 | SFTP           | `russh-sftp`            |
+| SCP            | `russh` (exec channel)  |
 | FTP            | `suppaftp`              |
 | Serial         | `serialport`            |
 | Local terminal | `portable-pty` (ConPTY) |
@@ -31,6 +32,8 @@ tabbed sessions, saved connection profiles, a real xterm terminal, and a file br
   session recording, and save-to-file. Terminal size stays in lock-step with the remote
   PTY, so cursor editing (`←/→`, history) never smears.
 - **SFTP file browser**, **port forwarding** (`ssh -L` tunnels), and saved-session sync.
+- **SCP transfer** — copy single files to/from a server over SSH (the **SCP** button on an
+  SSH tab), for hosts where the SFTP subsystem is disabled but `scp` still works.
 
 ## Prerequisites
 
@@ -94,6 +97,14 @@ src-tauri/src/       Rust backend
   lib.rs             shared types, AppState, command registration
 website/             Marketing + update/download site (Vite + React, static SPA)
 ```
+
+## Deployment
+
+See **[DEPLOY.md](DEPLOY.md)** for the full guide:
+
+- **Website** → Cloudflare Pages (free static hosting).
+- **Portable `.exe`** → GitHub Releases, built automatically by
+  [`.github/workflows/release.yml`](.github/workflows/release.yml) on every `v*` tag.
 
 ## Security note
 

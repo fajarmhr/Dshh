@@ -1,6 +1,7 @@
 mod ftp;
 mod local;
 mod logs;
+mod scp;
 mod serial;
 mod sftp;
 mod ssh;
@@ -85,6 +86,8 @@ pub fn run() {
             local::local_resize,
             local::local_close,
             local::local_open_admin,
+            scp::scp_upload,
+            scp::scp_download,
             sftp::sftp_connect,
             sftp::sftp_list,
             sftp::sftp_download,

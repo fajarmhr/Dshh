@@ -1,0 +1,56 @@
+name: Release
+
+# Builds the Windows portable .exe (+ installers) and publishes them to a
+# GitHub Release whenever you push a version tag, e.g.:
+#   git tag v0.1.0 && git push origin v0.1.0
+# You can also run it by hand from the Actions tab (workflow_dispatch).
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write # required for softprops/action-gh-release to create the release
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build Tauri app
+        run: npm run tauri:build
+
+      - name: Collect artifacts
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist-release | Out-Null
+          Copy-Item src-tauri/target/release/dshh.exe dist-release/Dshh-portable.exe
+          Get-ChildItem src-tauri/target/release/bundle/nsis/*-setup.exe -ErrorAction SilentlyContinue | Copy-Item -Destination dist-release/
+          Get-ChildItem src-tauri/target/release/bundle/msi/*.msi -ErrorAction SilentlyContinue | Copy-Item -Destination dist-release/
+          Get-ChildItem dist-release
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist-release/*
+          generate_release_notes: true
+          fail_on_unmatched_files: false

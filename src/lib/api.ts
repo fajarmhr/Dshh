@@ -73,6 +73,12 @@ export const localClose = (id: string) => invoke("local_close", { id });
 export const localOpenAdmin = (shell: string, cwd: string | null) =>
   invoke("local_open_admin", { shell, cwd });
 
+// ---- SCP (file copy over the SSH exec channel) ----
+export const scpUpload = (conn: Connection, local: string, remote: string) =>
+  invoke("scp_upload", { conn, local, remote });
+export const scpDownload = (conn: Connection, remote: string, local: string) =>
+  invoke("scp_download", { conn, remote, local });
+
 // ---- SFTP ----
 export const sftpConnect = (conn: Connection) => invoke<string>("sftp_connect", { conn });
 export const sftpList = (id: string, path: string) =>
