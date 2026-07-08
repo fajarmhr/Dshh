@@ -49,7 +49,7 @@
       <div style="padding-top:96px;">
         <div style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:0.18em;color:#5a6878;">ssh · sftp · scp · ftp · serial · local — one exe</div>
         <h1 class="hero-h1" style="margin:22px 0 0;font-size:72px;line-height:1.02;font-weight:700;letter-spacing:-0.03em;color:#e3eaf3;">Every protocol.<br>One process.</h1>
-        <p style="margin:26px 0 0;max-width:640px;font-size:17px;line-height:1.7;color:#93a1b3;">Dshh is a tabbed SSH, SFTP, SCP, FTP and serial client for Windows — with a built-in local terminal. Every protocol is implemented in-process, in Rust, inside a single portable executable — no <span style="font-family:'JetBrains Mono',monospace;font-size:15px;color:#e3eaf3;">ssh.exe</span>, no child processes, no installer.</p>
+        <p style="margin:26px 0 0;max-width:620px;font-size:17px;line-height:1.7;color:#93a1b3;text-wrap:pretty;">Dshh is a tabbed SSH, SFTP, SCP, FTP and serial client for Windows — with a built-in local terminal. Every protocol is implemented in-process, in Rust, inside a single portable executable — no <span style="font-family:'JetBrains Mono',monospace;font-size:15px;color:#e3eaf3;">ssh.exe</span>, no child processes, no installer.</p>
         <div style="display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-top:34px;">
           <a data-download href="https://github.com/fajarmhr/Dshh/releases/latest/download/Dshh-portable.exe" style="display:inline-flex;align-items:center;gap:8px;background:#5b8cff;border-radius:8px;padding:13px 24px;font-size:14.5px;font-weight:500;color:#fff;box-shadow:0 8px 24px -8px rgba(91,140,255,0.5);">↓ Download for Windows</a>
           <a href="#dsh-changelog" class="btn-ghost" style="padding:13px 22px;font-size:14.5px;">View changelog</a>
@@ -146,6 +146,22 @@
                   <div style="margin-top:6px;"><span style="color:#5a6878;">&gt; </span><span class="cursor" style="background:#b78af7;"></span></div>
                 </div>
               </div>
+              <div class="dock">
+                <div class="dock-chips">
+                  <span class="qchip">df -h</span>
+                  <span class="qchip">docker ps</span>
+                  <span class="qchip">tail -f syslog</span>
+                  <span class="qmanage">+ manage</span>
+                </div>
+                <div class="compose">
+                  <div class="compose-input">
+                    <span style="color:#5a6878;">$</span>
+                    <span style="color:#5a6878;">run a command…</span>
+                    <span class="compose-kbd">ctrl+k</span>
+                  </div>
+                  <span class="bcast">broadcast off</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -159,12 +175,12 @@
       <div class="eyebrow">protocols</div>
       <h2 class="h2">Six ways in. Zero child processes.</h2>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:16px;margin-top:40px;">
-        <div class="pcard"><div class="pic" style="background:rgba(91,140,255,0.1);color:#5b8cff;">&gt;_</div><div class="prow"><span class="pname">SSH</span><span class="pcrate">russh</span></div><p class="pdesc">Real xterm terminal with buffer search, session logging, highlight rules and port forwarding.</p></div>
-        <div class="pcard"><div class="pic" style="background:rgba(62,207,142,0.1);color:#3ecf8e;">~/</div><div class="prow"><span class="pname">SFTP</span><span class="pcrate">russh-sftp</span></div><p class="pdesc">File browser over your existing SSH hosts — one click from any terminal session.</p></div>
-        <div class="pcard"><div class="pic" style="background:rgba(124,164,255,0.12);color:#7ca4ff;">⇄</div><div class="prow"><span class="pname">SCP</span><span class="pcrate">russh</span></div><p class="pdesc">Copy files to/from a server over the SSH channel — for hosts with SFTP disabled.</p></div>
-        <div class="pcard"><div class="pic" style="background:rgba(232,165,76,0.1);color:#e8a54c;">⇅</div><div class="prow"><span class="pname">FTP</span><span class="pcrate">suppaftp</span></div><p class="pdesc">Plain FTP for the legacy boxes you can't decommission yet.</p></div>
-        <div class="pcard"><div class="pic" style="background:rgba(183,138,247,0.1);color:#b78af7;">⌁</div><div class="prow"><span class="pname">Serial</span><span class="pcrate">serialport</span></div><p class="pdesc">COM ports at any baud rate — bench rigs, switches, embedded consoles.</p></div>
-        <div class="pcard"><div class="pic" style="background:rgba(95,208,197,0.1);color:#5fd0c5;">▣</div><div class="prow"><span class="pname">Local</span><span class="pcrate">portable-pty</span></div><p class="pdesc">cmd &amp; PowerShell in a tab. Run-as-Admin opens elevated in its own window.</p></div>
+        <div class="pcard" style="--ph:rgba(91,140,255,0.4);"><div class="pic" style="background:rgba(91,140,255,0.1);color:#5b8cff;">&gt;_</div><div class="prow"><span class="pname">SSH</span><span class="pcrate">russh</span></div><p class="pdesc">Real xterm terminal with buffer search, session logging, highlight rules and port forwarding.</p></div>
+        <div class="pcard" style="--ph:rgba(62,207,142,0.4);"><div class="pic" style="background:rgba(62,207,142,0.1);color:#3ecf8e;">~/</div><div class="prow"><span class="pname">SFTP</span><span class="pcrate">russh-sftp</span></div><p class="pdesc">File browser over your existing SSH hosts — one click from any terminal session.</p></div>
+        <div class="pcard" style="--ph:rgba(124,164,255,0.4);"><div class="pic" style="background:rgba(124,164,255,0.12);color:#7ca4ff;">⇄</div><div class="prow"><span class="pname">SCP</span><span class="pcrate">russh</span></div><p class="pdesc">Copy files to/from a server over the SSH channel — for hosts with SFTP disabled.</p></div>
+        <div class="pcard" style="--ph:rgba(232,165,76,0.4);"><div class="pic" style="background:rgba(232,165,76,0.1);color:#e8a54c;">⇅</div><div class="prow"><span class="pname">FTP</span><span class="pcrate">suppaftp</span></div><p class="pdesc">Plain FTP for the legacy boxes you can't decommission yet.</p></div>
+        <div class="pcard" style="--ph:rgba(183,138,247,0.4);"><div class="pic" style="background:rgba(183,138,247,0.1);color:#b78af7;">⌁</div><div class="prow"><span class="pname">Serial</span><span class="pcrate">serialport</span></div><p class="pdesc">COM ports at any baud rate — bench rigs, switches, embedded consoles.</p></div>
+        <div class="pcard" style="--ph:rgba(95,208,197,0.4);"><div class="pic" style="background:rgba(95,208,197,0.1);color:#5fd0c5;">▣</div><div class="prow"><span class="pname">Local</span><span class="pcrate">portable-pty</span></div><p class="pdesc">cmd &amp; PowerShell in a tab. Run-as-Admin opens elevated in its own window.</p></div>
       </div>
 
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:48px;margin-top:84px;">
@@ -212,6 +228,7 @@
           <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:22px;">
             <a data-download href="https://github.com/fajarmhr/Dshh/releases/latest/download/Dshh-portable.exe" class="btn-primary">↓ Download exe</a>
             <a href="https://github.com/fajarmhr/Dshh/releases" target="_blank" rel="noopener" class="btn-ghost">All releases ↗</a>
+            <span data-copy-link class="btn-ghost" style="font-family:'JetBrains Mono',monospace;font-size:11.5px;">copy link</span>
           </div>
           <div data-live-note style="margin-top:16px;font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#38465a;">checking github for the latest release…</div>
         </div>

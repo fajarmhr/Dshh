@@ -3,9 +3,11 @@ const REPO = "fajarmhr/Dshh";
 // --- App-mockup tab switching (sidebar rows + tab strip) ---
 const panels = document.querySelectorAll<HTMLElement>(".panel");
 const tabs = document.querySelectorAll<HTMLElement>(".mtab");
+const sideRows = document.querySelectorAll<HTMLElement>(".side-row");
 function selectTab(name: string): void {
   tabs.forEach((t) => t.classList.toggle("is-active", t.dataset.tab === name));
   panels.forEach((p) => p.classList.toggle("is-active", p.dataset.panel === name));
+  sideRows.forEach((r) => r.classList.toggle("is-active", r.dataset.tab === name));
 }
 document.querySelectorAll<HTMLElement>("[data-tab]").forEach((el) =>
   el.addEventListener("click", () => selectTab(el.dataset.tab as string))
@@ -96,3 +98,17 @@ fetch(`https://api.github.com/repos/${REPO}/releases/latest`)
   .catch(() => {
     liveNotes.forEach((n) => (n.textContent = "releases: github.com/fajarmhr/Dshh/releases"));
   });
+
+// --- Copy download link (with brief ✓ confirmation) ---
+const copyBtn = document.querySelector<HTMLElement>("[data-copy-link]");
+let copyTimer: number | undefined;
+copyBtn?.addEventListener("click", () => {
+  const url = downloadLinks[0]?.href || `https://github.com/${REPO}/releases/latest`;
+  const done = (): void => {
+    copyBtn.textContent = "✓ copied";
+    window.clearTimeout(copyTimer);
+    copyTimer = window.setTimeout(() => (copyBtn.textContent = "copy link"), 1600);
+  };
+  if (navigator.clipboard?.writeText) navigator.clipboard.writeText(url).then(done, done);
+  else done();
+});
