@@ -1,8 +1,16 @@
-import { Database, FolderOpen, Plus, Trash2, X } from "lucide-react";
-import { useState } from "react";
+import { Database, FolderOpen, Plus, RefreshCw, Trash2, X } from "lucide-react";
+import { useEffect, useState } from "react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { nanoid } from "nanoid";
 import { useStore, adoptSessionsDir } from "../store";
+import {
+  appVersion,
+  openUrl,
+  updateApply,
+  updateCheck,
+  updateRestart,
+  type UpdateInfo,
+} from "../lib/api";
 import type { HighlightColor, HighlightRule } from "../lib/types";
 
 const HL_COLORS: Record<HighlightColor, string> = {
@@ -20,6 +28,47 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
   const [newPattern, setNewPattern] = useState("");
   const [newColor, setNewColor] = useState<HighlightColor>("red");
   const [sessionsNote, setSessionsNote] = useState("");
+
+  const [version, setVersion] = useState("");
+  const [updState, setUpdState] = useState<
+    "idle" | "checking" | "none" | "found" | "downloading" | "ready" | "error"
+  >("idle");
+  const [updInfo, setUpdInfo] = useState<UpdateInfo | null>(null);
+  const [updError, setUpdError] = useState("");
+
+  useEffect(() => {
+    appVersion().then(setVersion).catch(() => {});
+  }, []);
+
+  const checkUpdates = async () => {
+    setUpdState("checking");
+    setUpdError("");
+    try {
+      const info = await updateCheck();
+      setUpdInfo(info);
+      setUpdState(info.updateAvailable ? "found" : "none");
+    } catch (e) {
+      setUpdError(String(e));
+      setUpdState("error");
+    }
+  };
+
+  const installUpdate = async () => {
+    if (!updInfo) return;
+    if (!updInfo.assetUrl) {
+      openUrl(updInfo.releaseUrl).catch(() => {});
+      return;
+    }
+    setUpdState("downloading");
+    setUpdError("");
+    try {
+      await updateApply(updInfo.assetUrl);
+      setUpdState("ready");
+    } catch (e) {
+      setUpdError(String(e));
+      setUpdState("error");
+    }
+  };
 
   const pickDir = async () => {
     const picked = await openDialog({ directory: true, multiple: false });
@@ -72,6 +121,51 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
         </div>
 
         <div className="max-h-[70vh] space-y-6 overflow-y-auto px-5 py-4">
+          <div>
+            <div className="micro-label mb-2">Updates</div>
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-sm text-ink-hi">
+                Dshh {version ? `v${version}` : ""}
+                <span className="mt-0.5 block text-[11px] leading-relaxed text-ink-dim">
+                  {updState === "none" && "You are on the latest version."}
+                  {updState === "found" && updInfo && `v${updInfo.latest} is available.`}
+                  {updState === "ready" && "Update staged — restart to apply."}
+                  {(updState === "idle" || updState === "checking") &&
+                    "Checked automatically at startup; new versions show a notification."}
+                  {updState === "downloading" && "Downloading update…"}
+                  {updState === "error" && "Update failed."}
+                </span>
+              </div>
+              {updState === "found" || updState === "downloading" ? (
+                <button
+                  onClick={installUpdate}
+                  disabled={updState === "downloading"}
+                  className="btn-primary shrink-0 disabled:pointer-events-none disabled:opacity-40"
+                >
+                  {updState === "downloading" ? "Downloading…" : "Install"}
+                </button>
+              ) : updState === "ready" ? (
+                <button onClick={() => updateRestart()} className="btn-primary shrink-0">
+                  Restart now
+                </button>
+              ) : (
+                <button
+                  onClick={checkUpdates}
+                  disabled={updState === "checking"}
+                  className="flex shrink-0 items-center gap-1.5 rounded-md border border-edge px-3 py-1.5 text-xs text-ink-mid transition hover:bg-bg-hover hover:text-ink-hi disabled:pointer-events-none disabled:opacity-40"
+                >
+                  <RefreshCw size={13} className={updState === "checking" ? "animate-spin" : ""} />
+                  {updState === "checking" ? "Checking…" : "Check for updates"}
+                </button>
+              )}
+            </div>
+            {updError && (
+              <p className="mt-1.5 rounded-md border border-err/40 bg-err/10 px-2 py-1.5 font-mono text-[10.5px] text-err">
+                {updError}
+              </p>
+            )}
+          </div>
+
           <div>
             <div className="micro-label mb-2">Saved sessions</div>
             <label className="field-label">Sessions folder (optional)</label>

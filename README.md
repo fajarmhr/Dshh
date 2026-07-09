@@ -34,6 +34,9 @@ tabbed sessions, saved connection profiles, a real xterm terminal, and a file br
 - **SFTP file browser**, **port forwarding** (`ssh -L` tunnels), and saved-session sync.
 - **SCP transfer** — copy single files to/from a server over SSH (the **SCP** button on an
   SSH tab), for hosts where the SFTP subsystem is disabled but `scp` still works.
+  Remote paths may be absolute, `~/`-relative, or plain relative (resolved against home).
+- **Auto-update** — checks GitHub Releases at startup (and on demand in Settings);
+  one click downloads the new portable exe, swaps it in place, and restarts.
 
 ## Prerequisites
 

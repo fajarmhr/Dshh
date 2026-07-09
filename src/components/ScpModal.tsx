@@ -106,7 +106,7 @@ export function ScpModal({
               <input
                 className="field-input flex-1 font-mono text-[12.5px]"
                 value={remoteUp}
-                placeholder="remote path — /home/user/file or ./file"
+                placeholder="remote path — /home/user/file, ~/file or ./file"
                 onChange={(e) => setRemoteUp(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && doUpload()}
               />

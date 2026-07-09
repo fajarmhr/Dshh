@@ -6,6 +6,7 @@ mod serial;
 mod sftp;
 mod ssh;
 mod tunnel;
+mod update;
 
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -68,6 +69,7 @@ pub fn next_id(prefix: &str) -> String {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    update::cleanup_stale_update();
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(AppState::default())
@@ -104,6 +106,11 @@ pub fn run() {
             logs::read_text_file,
             tunnel::tunnel_start,
             tunnel::tunnel_stop,
+            update::app_version,
+            update::update_check,
+            update::update_apply,
+            update::update_restart,
+            update::open_url,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Dshh");

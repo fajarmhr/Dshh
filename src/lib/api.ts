@@ -108,6 +108,22 @@ export const tunnelStart = (
 ) => invoke<string>("tunnel_start", { conn, localPort, remoteHost, remotePort });
 export const tunnelStop = (id: string) => invoke("tunnel_stop", { id });
 
+// ---- Updates (GitHub Releases self-update) ----
+export interface UpdateInfo {
+  current: string;
+  latest: string;
+  updateAvailable: boolean;
+  notes: string;
+  /** Direct download of the portable exe, if the release has one. */
+  assetUrl: string | null;
+  releaseUrl: string;
+}
+export const appVersion = () => invoke<string>("app_version");
+export const updateCheck = () => invoke<UpdateInfo>("update_check");
+export const updateApply = (assetUrl: string) => invoke("update_apply", { assetUrl });
+export const updateRestart = () => invoke("update_restart");
+export const openUrl = (url: string) => invoke("open_url", { url });
+
 // ---- Logging / local files ----
 export const logStart = (id: string, path: string) => invoke("log_start", { id, path });
 export const logStop = (id: string) => invoke("log_stop", { id });

@@ -47,7 +47,14 @@ impl ScpIo {
     fn ctx(&self, base: &str) -> String {
         let e = String::from_utf8_lossy(&self.stderr);
         let e = e.trim();
-        if e.is_empty() { base.to_string() } else { format!("{base}: {e}") }
+        if e.is_empty() {
+            base.to_string()
+        } else if e.contains("not found") {
+            // Modern minimal servers often ship SFTP-only, with no scp binary.
+            format!("{base}: {e} — this server has no `scp` command; use the SFTP browser instead")
+        } else {
+            format!("{base}: {e}")
+        }
     }
 
     /// Read a control-response byte: 0 = OK, 1/2 = warning/error + message line.
@@ -91,8 +98,18 @@ impl ScpIo {
 }
 
 /// Single-quote a remote path for the server shell (scp runs it via `sh -c`).
+/// Quoting suppresses tilde expansion, so `~` / `~/x` are rewritten to the
+/// equivalent home-relative path first (remote scp resolves relative paths
+/// against the login home directory).
 fn quote(s: &str) -> String {
-    let escaped = s.replace('\'', "'\''");
+    let s = if s == "~" {
+        "."
+    } else if let Some(rest) = s.strip_prefix("~/") {
+        if rest.is_empty() { "." } else { rest }
+    } else {
+        s
+    };
+    let escaped = s.replace('\'', "'\\''");
     format!("'{escaped}'")
 }
 
@@ -199,5 +216,134 @@ pub async fn scp_download(conn: Connection, remote: String, local: String) -> Re
                 ))
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Live round-trip against a local sshd (see docs: disposable container on
+    /// port 2222, user test/test123). Run with:
+    ///   cargo test scp_roundtrip -- --ignored --nocapture
+    fn test_conn() -> Connection {
+        Connection {
+            id: "t".into(),
+            name: "t".into(),
+            protocol: "ssh".into(),
+            host: Some("127.0.0.1".into()),
+            port: Some(2222),
+            username: Some("test".into()),
+            auth_method: Some("password".into()),
+            password: Some("test123".into()),
+            private_key_path: None,
+            passphrase: None,
+            ftp_secure: None,
+            serial_port: None,
+            baud_rate: None,
+        }
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn scp_roundtrip() {
+        let dir = std::env::temp_dir();
+        let local = dir.join("dshh_scp_up.bin");
+        // ~4 MB so the transfer crosses the SSH flow-control window at least once.
+        let data: Vec<u8> = (0..1_000_000u32).flat_map(|i| i.to_le_bytes()).collect();
+        std::fs::write(&local, &data).unwrap();
+
+        scp_upload(
+            test_conn(),
+            local.to_string_lossy().into_owned(),
+            "/home/test/up.bin".into(),
+        )
+        .await
+        .expect("upload failed");
+
+        let back = dir.join("dshh_scp_down.bin");
+        let _ = std::fs::remove_file(&back);
+        scp_download(
+            test_conn(),
+            "/home/test/up.bin".into(),
+            back.to_string_lossy().into_owned(),
+        )
+        .await
+        .expect("download failed");
+        assert_eq!(std::fs::read(&back).unwrap(), data, "round-trip corrupted data");
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn scp_download_missing_file_reports_error() {
+        let dir = std::env::temp_dir();
+        let back = dir.join("dshh_scp_missing.bin");
+        let err = scp_download(
+            test_conn(),
+            "/home/test/does-not-exist.bin".into(),
+            back.to_string_lossy().into_owned(),
+        )
+        .await
+        .expect_err("expected an error for a missing remote file");
+        println!("missing-file error: {err}");
+    }
+
+    #[test]
+    fn quote_handles_tilde_and_apostrophes() {
+        assert_eq!(quote("/a/b.txt"), "'/a/b.txt'");
+        assert_eq!(quote("~"), "'.'");
+        assert_eq!(quote("~/"), "'.'");
+        assert_eq!(quote("~/x/y.txt"), "'x/y.txt'");
+        assert_eq!(quote("it's.txt"), "'it'\\''s.txt'");
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn scp_download_tilde_path() {
+        let dir = std::env::temp_dir();
+        let local = dir.join("dshh_tilde_src.bin");
+        std::fs::write(&local, b"tilde-down-test").unwrap();
+        scp_upload(test_conn(), local.to_string_lossy().into_owned(), "~/tilde-down.bin".into())
+            .await
+            .expect("seed upload failed");
+        let back = dir.join("dshh_tilde_down.bin");
+        let _ = std::fs::remove_file(&back);
+        scp_download(test_conn(), "~/tilde-down.bin".into(), back.to_string_lossy().into_owned())
+            .await
+            .expect("tilde download failed");
+        assert_eq!(std::fs::read(&back).unwrap(), b"tilde-down-test");
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn scp_upload_tilde_path() {
+        let dir = std::env::temp_dir();
+        let local = dir.join("dshh_tilde.bin");
+        std::fs::write(&local, b"tilde-test").unwrap();
+        let r = scp_upload(test_conn(), local.to_string_lossy().into_owned(), "~/tilde.bin".into()).await;
+        println!("tilde upload result: {r:?}");
+        r.expect("tilde upload failed");
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn scp_upload_to_directory_target() {
+        let dir = std::env::temp_dir();
+        let local = dir.join("dshh_dirtarget.bin");
+        std::fs::write(&local, b"dir-test").unwrap();
+        let r = scp_upload(test_conn(), local.to_string_lossy().into_owned(), "/home/test/".into()).await;
+        println!("dir-target upload result: {r:?}");
+        r.expect("dir-target upload failed");
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn scp_quote_apostrophe_roundtrip() {
+        let dir = std::env::temp_dir();
+        let local = dir.join("dshh_apos.bin");
+        std::fs::write(&local, b"apos-test").unwrap();
+        let r = scp_upload(test_conn(), local.to_string_lossy().into_owned(), "/home/test/it's.bin".into()).await;
+        println!("apostrophe upload result: {r:?}");
+        r.expect("apostrophe upload failed");
     }
 }
