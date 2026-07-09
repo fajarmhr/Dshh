@@ -2,7 +2,14 @@ import { Database, FolderOpen, Plus, RefreshCw, Trash2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { nanoid } from "nanoid";
-import { useStore, adoptSessionsDir } from "../store";
+import {
+  useStore,
+  adoptSessionsDir,
+  changeMaster,
+  disableMaster,
+  enableMaster,
+  unlockMaster,
+} from "../store";
 import {
   appVersion,
   openUrl,
@@ -39,6 +46,65 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     appVersion().then(setVersion).catch(() => {});
   }, []);
+
+  const masterLocked = useStore((s) => s.masterLocked);
+  const masterSet = !!settings.masterSalt;
+  const [secCurrent, setSecCurrent] = useState("");
+  const [secNew, setSecNew] = useState("");
+  const [secConfirm, setSecConfirm] = useState("");
+  const [secNote, setSecNote] = useState("");
+  const [secError, setSecError] = useState("");
+  const [secBusy, setSecBusy] = useState(false);
+
+  const resetSecFields = () => {
+    setSecCurrent("");
+    setSecNew("");
+    setSecConfirm("");
+  };
+
+  const runSec = async (fn: () => Promise<void>) => {
+    setSecBusy(true);
+    setSecError("");
+    setSecNote("");
+    try {
+      await fn();
+      resetSecFields();
+    } catch (e) {
+      setSecError(String(e));
+    } finally {
+      setSecBusy(false);
+    }
+  };
+
+  const secEnable = () =>
+    runSec(async () => {
+      if (secNew.length < 4) throw new Error("Use at least 4 characters.");
+      if (secNew !== secConfirm) throw new Error("Passwords do not match.");
+      await enableMaster(secNew);
+      setSecNote("Master password enabled — saved passwords are now encrypted.");
+    });
+
+  const secUnlock = () =>
+    runSec(async () => {
+      if (!(await unlockMaster(secCurrent))) throw new Error("Wrong master password.");
+      setSecNote("Unlocked.");
+    });
+
+  const secChange = () =>
+    runSec(async () => {
+      if (secNew.length < 4) throw new Error("Use at least 4 characters.");
+      if (secNew !== secConfirm) throw new Error("Passwords do not match.");
+      if (!(await changeMaster(secCurrent, secNew)))
+        throw new Error("Wrong current master password.");
+      setSecNote("Master password changed.");
+    });
+
+  const secDisable = () =>
+    runSec(async () => {
+      if (!(await disableMaster(secCurrent)))
+        throw new Error("Wrong master password.");
+      setSecNote("Master password removed — passwords are stored as plain text again.");
+    });
 
   const checkUpdates = async () => {
     setUpdState("checking");
@@ -167,6 +233,117 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
           </div>
 
           <div>
+            <div className="micro-label mb-2">Security</div>
+            {!masterSet ? (
+              <>
+                <p className="mb-2 text-[11px] leading-relaxed text-ink-dim">
+                  Set a master password to encrypt saved connection passwords and
+                  key passphrases (AES-256, key derived with Argon2id). You will
+                  be asked for it once each time the app starts.
+                </p>
+                <div className="flex gap-2">
+                  <input
+                    type="password"
+                    className="field-input flex-1 font-mono text-[12.5px]"
+                    placeholder="new master password"
+                    value={secNew}
+                    onChange={(e) => setSecNew(e.target.value)}
+                  />
+                  <input
+                    type="password"
+                    className="field-input flex-1 font-mono text-[12.5px]"
+                    placeholder="confirm"
+                    value={secConfirm}
+                    onChange={(e) => setSecConfirm(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && secEnable()}
+                  />
+                  <button
+                    onClick={secEnable}
+                    disabled={secBusy || !secNew}
+                    className="btn-primary shrink-0 disabled:pointer-events-none disabled:opacity-40"
+                  >
+                    Enable
+                  </button>
+                </div>
+              </>
+            ) : masterLocked ? (
+              <div className="flex gap-2">
+                <input
+                  type="password"
+                  className="field-input flex-1 font-mono text-[12.5px]"
+                  placeholder="master password"
+                  value={secCurrent}
+                  onChange={(e) => setSecCurrent(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && secUnlock()}
+                />
+                <button
+                  onClick={secUnlock}
+                  disabled={secBusy || !secCurrent}
+                  className="btn-primary shrink-0 disabled:pointer-events-none disabled:opacity-40"
+                >
+                  Unlock
+                </button>
+              </div>
+            ) : (
+              <>
+                <p className="mb-2 text-[11px] leading-relaxed text-ink-dim">
+                  Master password is on — saved secrets are encrypted at rest.
+                  Enter the current password to change or remove it.
+                </p>
+                <div className="space-y-2">
+                  <input
+                    type="password"
+                    className="field-input w-full font-mono text-[12.5px]"
+                    placeholder="current master password"
+                    value={secCurrent}
+                    onChange={(e) => setSecCurrent(e.target.value)}
+                  />
+                  <div className="flex gap-2">
+                    <input
+                      type="password"
+                      className="field-input flex-1 font-mono text-[12.5px]"
+                      placeholder="new password (for change)"
+                      value={secNew}
+                      onChange={(e) => setSecNew(e.target.value)}
+                    />
+                    <input
+                      type="password"
+                      className="field-input flex-1 font-mono text-[12.5px]"
+                      placeholder="confirm"
+                      value={secConfirm}
+                      onChange={(e) => setSecConfirm(e.target.value)}
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={secChange}
+                      disabled={secBusy || !secCurrent || !secNew}
+                      className="btn-primary disabled:pointer-events-none disabled:opacity-40"
+                    >
+                      Change password
+                    </button>
+                    <button
+                      onClick={secDisable}
+                      disabled={secBusy || !secCurrent}
+                      className="rounded-md border border-err/40 px-3 text-xs text-err transition hover:bg-err/10 disabled:pointer-events-none disabled:opacity-40"
+                    >
+                      Disable
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+            {secNote && !secError && (
+              <p className="mt-1.5 font-mono text-[11px] text-accent">{secNote}</p>
+            )}
+            {secError && (
+              <p className="mt-1.5 rounded-md border border-err/40 bg-err/10 px-2 py-1.5 font-mono text-[10.5px] text-err">
+                {secError}
+              </p>
+            )}
+          </div>
+
+          <div>
             <div className="micro-label mb-2">Saved sessions</div>
             <label className="field-label">Sessions folder (optional)</label>
             <div className="flex gap-2">
@@ -192,8 +369,10 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
               Saved connections are mirrored to{" "}
               <span className="font-mono text-ink-mid">connections.json</span> in this
               folder — handy for backups or syncing between machines. If the folder
-              already contains one, it is loaded and replaces the current list.
-              Passwords stored there are plain text, so pick a private location.
+              already contains one, it is loaded and replaces the current list.{" "}
+              {masterSet
+                ? "Passwords in it are encrypted with your master password."
+                : "Passwords stored there are plain text, so pick a private location — or set a master password above."}
             </p>
             {sessionsNote && (
               <p className="mt-1.5 font-mono text-[11px] text-accent">{sessionsNote}</p>

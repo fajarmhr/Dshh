@@ -108,6 +108,21 @@ export const tunnelStart = (
 ) => invoke<string>("tunnel_start", { conn, localPort, remoteHost, remotePort });
 export const tunnelStop = (id: string) => invoke("tunnel_stop", { id });
 
+// ---- Master password (secrets encrypted at rest with AES-GCM) ----
+export interface MasterMeta {
+  salt: string;
+  check: string;
+}
+export const masterSetup = (password: string) =>
+  invoke<MasterMeta>("master_setup", { password });
+export const masterUnlock = (password: string, salt: string, check: string) =>
+  invoke<boolean>("master_unlock", { password, salt, check });
+export const masterLock = () => invoke("master_lock");
+export const secretsEncrypt = (values: string[]) =>
+  invoke<string[]>("secrets_encrypt", { values });
+export const secretsDecrypt = (values: string[]) =>
+  invoke<string[]>("secrets_decrypt", { values });
+
 // ---- Updates (GitHub Releases self-update) ----
 export interface UpdateInfo {
   current: string;

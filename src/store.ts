@@ -1,6 +1,14 @@
 import { create } from "zustand";
 import { nanoid } from "nanoid";
-import { readTextFile, saveTextFile } from "./lib/api";
+import {
+  masterLock,
+  masterSetup,
+  masterUnlock,
+  readTextFile,
+  saveTextFile,
+  secretsDecrypt,
+  secretsEncrypt,
+} from "./lib/api";
 import type {
   Connection,
   HighlightRule,
@@ -21,6 +29,10 @@ export interface Settings {
   sessionsDir: string;
   highlightEnabled: boolean;
   highlightRules: HighlightRule[];
+  /** Master-password KDF salt (base64). Empty = no master password set. */
+  masterSalt: string;
+  /** Verifier blob used to check an entered master password. */
+  masterCheck: string;
 }
 
 const DEFAULT_HIGHLIGHT_RULES: HighlightRule[] = [
@@ -37,6 +49,8 @@ const DEFAULT_SETTINGS: Settings = {
   sessionsDir: "",
   highlightEnabled: true,
   highlightRules: DEFAULT_HIGHLIGHT_RULES,
+  masterSalt: "",
+  masterCheck: "",
 };
 
 function loadJson<T>(key: string): T | null {
@@ -53,25 +67,79 @@ function loadSettings(): Settings {
   return { ...DEFAULT_SETTINGS, ...(loadJson<Partial<Settings>>(SETTINGS_KEY) ?? {}) };
 }
 
-const persistConnections = (c: Connection[]) =>
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(c));
-
 function sessionsFilePath(dir: string): string {
   return `${dir.replace(/[\\/]+$/, "")}/connections.json`;
 }
 
-/** Fire-and-forget mirror of saved connections to the optional sessions folder. */
-function mirrorToDisk(connections: Connection[], dir: string) {
-  if (!dir) return;
-  saveTextFile(sessionsFilePath(dir), JSON.stringify(connections, null, 2)).catch(
-    () => {}
-  );
+/**
+ * Apply `fn` to the secret fields (password, passphrase) of every connection
+ * in one batched backend call, returning new connection objects.
+ */
+async function mapSecrets(
+  conns: Connection[],
+  fn: (values: string[]) => Promise<string[]>
+): Promise<Connection[]> {
+  const values: string[] = [];
+  for (const c of conns) values.push(c.password ?? "", c.passphrase ?? "");
+  const out = await fn(values);
+  return conns.map((c, i) => ({
+    ...c,
+    password: out[i * 2] || undefined,
+    passphrase: out[i * 2 + 1] || undefined,
+  }));
+}
+
+/** Shape of connections.json when a master password is set (v2). */
+interface MirrorV2 {
+  dshh: 2;
+  master: { salt: string; check: string };
+  connections: Connection[];
+}
+
+/**
+ * Persist connections to localStorage and the optional sessions folder.
+ * With a master password set and unlocked, secrets are encrypted first; while
+ * locked the in-memory values are still encrypted, so they pass through
+ * unchanged. Writes are chained so rapid updates can't land out of order.
+ */
+let persistChain: Promise<void> = Promise.resolve();
+function persistAll(connections: Connection[]) {
+  persistChain = persistChain.then(async () => {
+    const { settings, masterLocked } = useStore.getState();
+    let stored = connections;
+    if (settings.masterSalt && !masterLocked) {
+      try {
+        stored = await mapSecrets(connections, secretsEncrypt);
+      } catch {
+        return; // key unavailable — don't write plaintext while protected
+      }
+    }
+    const payload: Connection[] | MirrorV2 = settings.masterSalt
+      ? {
+          dshh: 2,
+          master: { salt: settings.masterSalt, check: settings.masterCheck },
+          connections: stored,
+        }
+      : stored;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
+    if (settings.sessionsDir) {
+      saveTextFile(
+        sessionsFilePath(settings.sessionsDir),
+        JSON.stringify(payload, null, 2)
+      ).catch(() => {});
+    }
+  });
 }
 const persistQuickCommands = (q: QuickCommand[]) =>
   localStorage.setItem(QUICKCMD_KEY, JSON.stringify(q));
 
 interface AppState {
   connections: Connection[];
+  /**
+   * True while a master password is set but not yet entered this run: secret
+   * fields in `connections` still hold `enc:v1:` blobs and can't be used.
+   */
+  masterLocked: boolean;
   /** In-memory connections behind one-off local terminals; never persisted. */
   transientConnections: Connection[];
   sessions: Session[];
@@ -107,6 +175,7 @@ interface AppState {
 
 export const useStore = create<AppState>((set, get) => ({
   connections: loadJson<Connection[]>(STORAGE_KEY) ?? [],
+  masterLocked: !!loadSettings().masterSalt,
   transientConnections: [],
   sessions: [],
   activeSessionId: null,
@@ -118,9 +187,8 @@ export const useStore = create<AppState>((set, get) => ({
   addConnection: (c) => {
     const conn: Connection = { ...c, id: nanoid() };
     const connections = [...get().connections, conn];
-    persistConnections(connections);
-    mirrorToDisk(connections, get().settings.sessionsDir);
     set({ connections });
+    persistAll(connections);
     return conn;
   },
 
@@ -128,16 +196,14 @@ export const useStore = create<AppState>((set, get) => ({
     const connections = get().connections.map((c) =>
       c.id === id ? { ...c, ...patch } : c
     );
-    persistConnections(connections);
-    mirrorToDisk(connections, get().settings.sessionsDir);
     set({ connections });
+    persistAll(connections);
   },
 
   removeConnection: (id) => {
     const connections = get().connections.filter((c) => c.id !== id);
-    persistConnections(connections);
-    mirrorToDisk(connections, get().settings.sessionsDir);
     set({ connections });
+    persistAll(connections);
   },
 
   duplicateConnection: (id) => {
@@ -146,9 +212,8 @@ export const useStore = create<AppState>((set, get) => ({
     const { id: _drop, ...rest } = orig;
     const copy: Connection = { ...rest, id: nanoid(), name: `${orig.name} (copy)` };
     const connections = [...get().connections, copy];
-    persistConnections(connections);
-    mirrorToDisk(connections, get().settings.sessionsDir);
     set({ connections });
+    persistAll(connections);
     return copy;
   },
 
@@ -284,24 +349,102 @@ export const useStore = create<AppState>((set, get) => ({
  * exists it becomes the source of truth and is loaded (returns true); if it
  * doesn't exist yet, the folder is seeded with the current list (returns
  * false). A malformed file throws instead of being overwritten.
+ *
+ * Accepts both formats: a plain array (v1, plaintext) and the v2 wrapper
+ * `{ dshh: 2, master, connections }`. Adopting a v2 file also adopts its
+ * master password and locks the app until that password is entered.
  */
 export async function adoptSessionsDir(dir: string): Promise<boolean> {
   let raw: string;
   try {
     raw = await readTextFile(sessionsFilePath(dir));
   } catch {
-    mirrorToDisk(useStore.getState().connections, dir);
+    persistAll(useStore.getState().connections);
     return false;
   }
   const parsed = JSON.parse(raw);
-  if (!Array.isArray(parsed)) {
+  let list: unknown;
+  if (Array.isArray(parsed)) {
+    list = parsed;
+  } else if (parsed && typeof parsed === "object" && Array.isArray(parsed.connections)) {
+    list = parsed.connections;
+    const master = parsed.master;
+    if (master && typeof master.salt === "string" && master.salt) {
+      const { settings } = useStore.getState();
+      if (settings.masterSalt !== master.salt) {
+        // Different key than ours — adopt it and require its password.
+        useStore.getState().setSettings({
+          masterSalt: master.salt,
+          masterCheck: String(master.check ?? ""),
+        });
+        await masterLock().catch(() => {});
+        useStore.setState({ masterLocked: true });
+      }
+    }
+  } else {
     throw new Error("connections.json is not a list of sessions");
   }
-  const connections = parsed.filter(
-    (c): c is Connection => !!c && typeof c === "object" && typeof c.id === "string"
+  let connections = (list as unknown[]).filter(
+    (c): c is Connection =>
+      !!c && typeof c === "object" && typeof (c as Connection).id === "string"
   );
-  persistConnections(connections);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(connections));
+  const { settings, masterLocked } = useStore.getState();
+  if (settings.masterSalt && !masterLocked) {
+    // Same key, already unlocked — keep in-memory copies usable.
+    try {
+      connections = await mapSecrets(connections, secretsDecrypt);
+    } catch {
+      /* leave encrypted; unlock will decrypt */
+    }
+  }
   useStore.setState({ connections });
+  return true;
+}
+
+/** Enter the master password to decrypt saved secrets for this run. */
+export async function unlockMaster(password: string): Promise<boolean> {
+  const { settings, connections } = useStore.getState();
+  const ok = await masterUnlock(password, settings.masterSalt, settings.masterCheck);
+  if (!ok) return false;
+  const decrypted = await mapSecrets(connections, secretsDecrypt);
+  useStore.setState({ connections: decrypted, masterLocked: false });
+  persistAll(decrypted); // normalize storage to fully-encrypted form
+  return true;
+}
+
+/** Turn on master-password protection and encrypt everything saved. */
+export async function enableMaster(password: string): Promise<void> {
+  const meta = await masterSetup(password);
+  useStore.getState().setSettings({ masterSalt: meta.salt, masterCheck: meta.check });
+  useStore.setState({ masterLocked: false });
+  persistAll(useStore.getState().connections);
+}
+
+/** Verify the current password, then store everything as plain text again. */
+export async function disableMaster(password: string): Promise<boolean> {
+  const { settings, connections, masterLocked } = useStore.getState();
+  const ok = await masterUnlock(password, settings.masterSalt, settings.masterCheck);
+  if (!ok) return false;
+  // If we were locked, in-memory secrets are still encrypted — decrypt now.
+  const plain = masterLocked ? await mapSecrets(connections, secretsDecrypt) : connections;
+  useStore.getState().setSettings({ masterSalt: "", masterCheck: "" });
+  useStore.setState({ connections: plain, masterLocked: false });
+  await masterLock().catch(() => {});
+  persistAll(plain);
+  return true;
+}
+
+/** Re-key: verify the current password, then re-encrypt with a new one. */
+export async function changeMaster(current: string, next: string): Promise<boolean> {
+  const { settings, connections, masterLocked } = useStore.getState();
+  const ok = await masterUnlock(current, settings.masterSalt, settings.masterCheck);
+  if (!ok) return false;
+  const plain = masterLocked ? await mapSecrets(connections, secretsDecrypt) : connections;
+  const meta = await masterSetup(next);
+  useStore.getState().setSettings({ masterSalt: meta.salt, masterCheck: meta.check });
+  useStore.setState({ connections: plain, masterLocked: false });
+  persistAll(plain);
   return true;
 }
 

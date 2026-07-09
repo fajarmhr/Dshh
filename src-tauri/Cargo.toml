@@ -13,7 +13,10 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+aes-gcm = "0.10"
 anyhow = "1.0.103"
+argon2 = "0.5"
+base64 = "0.22"
 async-trait = "0.1.89"
 portable-pty = "0.9.0"
 russh = { version = "0.61.2", default-features = false, features = ["ring", "flate2", "rsa"] }

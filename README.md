@@ -37,6 +37,9 @@ tabbed sessions, saved connection profiles, a real xterm terminal, and a file br
   Remote paths may be absolute, `~/`-relative, or plain relative (resolved against home).
 - **Auto-update** — checks GitHub Releases at startup (and on demand in Settings);
   one click downloads the new portable exe, swaps it in place, and restarts.
+- **Master password (optional)** — encrypts saved passwords/passphrases at rest
+  (Argon2id + AES-256-GCM) in both app storage and the `connections.json` mirror;
+  unlock once per app start. Enable it in Settings → Security.
 
 ## Prerequisites
 

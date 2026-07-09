@@ -1,3 +1,4 @@
+mod crypto;
 mod ftp;
 mod local;
 mod logs;
@@ -73,6 +74,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(AppState::default())
+        .manage(crypto::CryptoState::default())
         .invoke_handler(tauri::generate_handler![
             ssh::ssh_connect,
             ssh::ssh_write,
@@ -106,6 +108,11 @@ pub fn run() {
             logs::read_text_file,
             tunnel::tunnel_start,
             tunnel::tunnel_stop,
+            crypto::master_setup,
+            crypto::master_unlock,
+            crypto::master_lock,
+            crypto::secrets_encrypt,
+            crypto::secrets_decrypt,
             update::app_version,
             update::update_check,
             update::update_apply,
