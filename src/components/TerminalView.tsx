@@ -12,6 +12,7 @@ import {
   CircleStop,
   FolderTree,
   Network,
+  RadioTower,
   RotateCw,
   Save,
   Search,
@@ -30,11 +31,18 @@ import {
   localWrite,
   localResize,
   localClose,
+  telnetOpen,
+  telnetWrite,
+  telnetClose,
   logStart,
   logStop,
   saveTextFile,
 } from "../lib/api";
-import { registerTerminal, unregisterTerminal } from "../lib/terminalRegistry";
+import {
+  broadcastToTerminals,
+  registerTerminal,
+  unregisterTerminal,
+} from "../lib/terminalRegistry";
 import { applyHighlights, compileRules, type CompiledRule } from "../lib/highlight";
 import { TunnelsModal } from "./TunnelsModal";
 import { ScpModal } from "./ScpModal";
@@ -86,6 +94,9 @@ export function TerminalView({
 
   const isSsh = session.protocol === "ssh";
   const isLocal = session.protocol === "local";
+  const isTelnet = session.protocol === "telnet";
+  const broadcastInput = useStore((s) => s.broadcastInput);
+  const toggleBroadcast = useStore((s) => s.toggleBroadcast);
   // Both SSH and local run over a PTY, so both need window-size sync.
   const usesPty = isSsh || isLocal;
   const connected = session.status === "connected";
@@ -131,7 +142,22 @@ export function TerminalView({
   const writeBackend = (data: string) => {
     const id = backendId.current;
     if (!id) return;
-    (isSsh ? sshWrite : isLocal ? localWrite : serialWrite)(id, data);
+    (isSsh ? sshWrite : isLocal ? localWrite : isTelnet ? telnetWrite : serialWrite)(
+      id,
+      data
+    );
+  };
+
+  // Multi-execution: mirror typed input to every other live terminal.
+  const handleInput = (data: string) => {
+    if (useStore.getState().broadcastInput) {
+      const others = useStore
+        .getState()
+        .sessions.filter((s) => s.id !== session.id && s.status === "connected")
+        .map((s) => s.id);
+      broadcastToTerminals(others, data);
+    }
+    writeBackend(data);
   };
 
   const connect = async () => {
@@ -172,7 +198,9 @@ export function TerminalView({
               onData,
               onClosed
             )
-          : await serialOpen(conn, onData);
+          : isTelnet
+            ? await telnetOpen(conn, onData, onClosed)
+            : await serialOpen(conn, onData);
 
       if (life.dead) {
         // Component unmounted while the handshake was in flight.
@@ -180,7 +208,9 @@ export function TerminalView({
           ? sshDisconnect(id)
           : isLocal
             ? localClose(id)
-            : serialClose(id)
+            : isTelnet
+              ? telnetClose(id)
+              : serialClose(id)
         ).catch(() => {});
         return;
       }
@@ -267,7 +297,7 @@ export function TerminalView({
     fitRef.current = fit;
     searchRef.current = search;
 
-    term.onData((d) => writeBackend(d));
+    term.onData((d) => handleInput(d));
 
     term.attachCustomKeyEventHandler((e) => {
       if (e.type === "keydown" && e.ctrlKey && (e.key === "f" || e.key === "F")) {
@@ -299,7 +329,9 @@ export function TerminalView({
           ? sshDisconnect(backendId.current)
           : isLocal
             ? localClose(backendId.current)
-            : serialClose(backendId.current)
+            : isTelnet
+              ? telnetClose(backendId.current)
+              : serialClose(backendId.current)
         ).catch(() => {});
         backendId.current = null;
       }
@@ -452,6 +484,18 @@ export function TerminalView({
               <div className="mx-1 h-4 w-px bg-edge" />
             </>
           )}
+          <button
+            onClick={toggleBroadcast}
+            className={`flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition active:scale-[0.97] ${
+              broadcastInput
+                ? "bg-warn/15 text-warn hover:bg-warn/25"
+                : "text-ink-mid hover:bg-bg-hover hover:text-ink-hi"
+            }`}
+            title="Multi-execution: send typed input to every connected terminal"
+          >
+            <RadioTower size={14} />
+            {broadcastInput ? "Broadcast ON" : "Broadcast"}
+          </button>
           <button
             onClick={() => setSearchOpen(true)}
             className="tb-btn"

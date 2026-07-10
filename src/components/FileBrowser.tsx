@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
 import {
   ArrowUp,
   RefreshCw,
@@ -8,6 +9,7 @@ import {
   Folder,
   File as FileIcon,
   HardDrive,
+  Pencil,
 } from "lucide-react";
 import { useStore } from "../store";
 import {
@@ -21,6 +23,7 @@ import {
   ftpDownload,
   ftpUpload,
   ftpDisconnect,
+  editStart,
 } from "../lib/api";
 import type { Connection, RemoteFile, Session } from "../lib/types";
 import { formatBytes, formatDate } from "../lib/utils";
@@ -39,6 +42,11 @@ export function FileBrowser({
   const [files, setFiles] = useState<RemoteFile[]>([]);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string>("");
+  const [dragOver, setDragOver] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  // Latest values for the long-lived drag-drop subscription.
+  const dropCtx = useRef({ backendId: null as string | null, cwd, isSftp });
+  dropCtx.current = { backendId, cwd, isSftp };
 
   const list = useCallback(
     async (id: string, path: string) => {
@@ -87,7 +95,12 @@ export function FileBrowser({
   }, []);
 
   const enter = (f: RemoteFile) => {
-    if (!backendId || !f.isDir) return;
+    if (!backendId) return;
+    if (!f.isDir) {
+      // Double-clicking a file opens it in the local editor (SFTP only).
+      if (isSftp) editRemote(f);
+      return;
+    }
     list(backendId, f.path);
   };
 
@@ -115,29 +128,93 @@ export function FileBrowser({
     }
   };
 
+  const uploadPaths = useCallback(
+    async (paths: string[]) => {
+      const { backendId: id, cwd: dir, isSftp: sftp } = dropCtx.current;
+      if (!id || paths.length === 0) return;
+      setBusy(true);
+      let ok = 0;
+      let lastErr = "";
+      for (const p of paths) {
+        const name = p.split(/[\/]/).pop()!;
+        const remote = (dir.endsWith("/") ? dir : dir + "/") + name;
+        setMsg(`Uploading ${name}…`);
+        try {
+          sftp ? await sftpUpload(id, p, remote) : await ftpUpload(id, p, remote);
+          ok++;
+        } catch (e) {
+          lastErr = `${name}: ${String(e)}`;
+        }
+      }
+      setMsg(
+        lastErr
+          ? `Uploaded ${ok}/${paths.length} — ${lastErr}`
+          : `Uploaded ${ok} file${ok === 1 ? "" : "s"}`
+      );
+      await list(id, dir);
+      setBusy(false);
+    },
+    [list]
+  );
+
   const upload = async () => {
     if (!backendId) return;
-    const picked = await openDialog({ multiple: false });
-    if (!picked || Array.isArray(picked)) return;
-    const name = picked.split(/[\/]/).pop()!;
-    const remote = (cwd.endsWith("/") ? cwd : cwd + "/") + name;
-    setBusy(true);
-    setMsg(`Uploading ${name}…`);
+    const picked = await openDialog({ multiple: true });
+    if (!picked) return;
+    await uploadPaths(Array.isArray(picked) ? picked : [picked]);
+  };
+
+  // Drag & drop from Explorer: upload into the current directory. The event
+  // is window-global, so only react while the pointer is over this pane.
+  useEffect(() => {
+    const inBounds = (pos: { x: number; y: number }) => {
+      const el = rootRef.current;
+      if (!el) return false;
+      const scale = window.devicePixelRatio || 1;
+      const r = el.getBoundingClientRect();
+      const x = pos.x / scale;
+      const y = pos.y / scale;
+      return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+    };
+    const unlisten = getCurrentWebview().onDragDropEvent((event) => {
+      const p = event.payload;
+      if (p.type === "over") {
+        setDragOver(inBounds(p.position));
+      } else if (p.type === "drop") {
+        setDragOver(false);
+        if (inBounds(p.position)) uploadPaths(p.paths);
+      } else if (p.type === "leave") {
+        setDragOver(false);
+      }
+    });
+    return () => {
+      unlisten.then((f) => f());
+    };
+  }, [uploadPaths]);
+
+  // Open in the local default editor; saves upload back automatically.
+  const editRemote = async (f: RemoteFile) => {
+    if (f.isDir || !isSftp) return;
+    setMsg(`Opening ${f.name} in your editor…`);
     try {
-      isSftp
-        ? await sftpUpload(backendId, picked, remote)
-        : await ftpUpload(backendId, picked, remote);
-      setMsg(`Uploaded ${name}`);
-      await list(backendId, cwd);
+      await editStart(conn, f.path, (ev) =>
+        setMsg(ev.startsWith("error") ? ev : `${f.name}: ${ev} — saved to server`)
+      );
+      setMsg(`${f.name} opened — saving in your editor uploads automatically`);
     } catch (e) {
       setMsg(String(e));
-    } finally {
-      setBusy(false);
     }
   };
 
   return (
-    <div className="flex h-full flex-col bg-bg-base">
+    <div ref={rootRef} className="relative flex h-full flex-col bg-bg-base">
+      {dragOver && (
+        <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center rounded-lg border-2 border-dashed border-accent bg-accent/10">
+          <span className="rounded-md bg-bg-panel px-3 py-1.5 font-mono text-xs text-accent">
+            drop to upload into {cwd}
+          </span>
+        </div>
+      )}
       <div className="flex h-9 shrink-0 items-center gap-1 border-b border-edge bg-bg-panel px-2">
         <button onClick={goUp} className="tb-btn" title="Up one directory">
           <ArrowUp size={15} />
@@ -200,13 +277,24 @@ export function FileBrowser({
                   </td>
                   <td className="px-2">
                     {!f.isDir && (
-                      <button
-                        onClick={() => download(f)}
-                        className="rounded p-1 text-ink-dim opacity-0 transition hover:bg-bg-elev hover:text-ink-hi group-hover:opacity-100"
-                        title="Download"
-                      >
-                        <Download size={14} />
-                      </button>
+                      <div className="flex items-center justify-end gap-0.5">
+                        {isSftp && (
+                          <button
+                            onClick={() => editRemote(f)}
+                            className="rounded p-1 text-ink-dim opacity-0 transition hover:bg-bg-elev hover:text-ink-hi group-hover:opacity-100"
+                            title="Edit in local editor (saves upload automatically)"
+                          >
+                            <Pencil size={14} />
+                          </button>
+                        )}
+                        <button
+                          onClick={() => download(f)}
+                          className="rounded p-1 text-ink-dim opacity-0 transition hover:bg-bg-elev hover:text-ink-hi group-hover:opacity-100"
+                          title="Download"
+                        >
+                          <Download size={14} />
+                        </button>
+                      </div>
                     )}
                   </td>
                 </tr>

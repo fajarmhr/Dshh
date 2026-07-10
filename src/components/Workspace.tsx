@@ -74,7 +74,8 @@ export function Workspace() {
             >
               {s.protocol === "ssh" ||
               s.protocol === "serial" ||
-              s.protocol === "local" ? (
+              s.protocol === "local" ||
+              s.protocol === "telnet" ? (
                 <TerminalView session={s} conn={conn} />
               ) : (
                 <FileBrowser session={s} conn={conn} />

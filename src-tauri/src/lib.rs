@@ -1,4 +1,5 @@
 mod crypto;
+mod edit;
 mod ftp;
 mod local;
 mod logs;
@@ -6,6 +7,7 @@ mod scp;
 mod serial;
 mod sftp;
 mod ssh;
+mod telnet;
 mod tunnel;
 mod update;
 
@@ -31,6 +33,14 @@ pub struct Connection {
     pub ftp_secure: Option<bool>,
     pub serial_port: Option<String>,
     pub baud_rate: Option<u32>,
+    // Optional SSH jump host (bastion). One hop; auth mirrors the main fields.
+    pub jump_host: Option<String>,
+    pub jump_port: Option<u16>,
+    pub jump_username: Option<String>,
+    pub jump_auth_method: Option<String>,
+    pub jump_password: Option<String>,
+    pub jump_key_path: Option<String>,
+    pub jump_passphrase: Option<String>,
 }
 
 /// A file entry returned to the frontend for SFTP/FTP browsing.
@@ -60,6 +70,8 @@ pub struct AppState {
     pub serial: Mutex<HashMap<String, serial::SerialSession>>,
     pub local: Mutex<HashMap<String, local::LocalSession>>,
     pub tunnels: Mutex<HashMap<String, tunnel::TunnelSession>>,
+    pub telnet: Mutex<HashMap<String, telnet::TelnetSession>>,
+    pub edits: Mutex<HashMap<String, edit::EditSession>>,
 }
 
 static COUNTER: AtomicU64 = AtomicU64::new(1);
@@ -108,6 +120,11 @@ pub fn run() {
             logs::read_text_file,
             tunnel::tunnel_start,
             tunnel::tunnel_stop,
+            telnet::telnet_open,
+            telnet::telnet_write,
+            telnet::telnet_close,
+            edit::edit_start,
+            edit::edit_stop,
             crypto::master_setup,
             crypto::master_unlock,
             crypto::master_lock,

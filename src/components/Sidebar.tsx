@@ -5,6 +5,7 @@ import {
   FolderTree,
   Server,
   Cable,
+  Globe,
   SquareTerminal,
   Pencil,
   Trash2,
@@ -29,6 +30,7 @@ const ICONS: Record<Protocol, React.ComponentType<{ size?: number; color?: strin
   ftp: Server,
   serial: Cable,
   local: SquareTerminal,
+  telnet: Globe,
 };
 
 const WIDTH_KEY = "dshh.sidebarWidth";

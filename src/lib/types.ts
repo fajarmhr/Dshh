@@ -1,4 +1,4 @@
-export type Protocol = "ssh" | "sftp" | "ftp" | "serial" | "local";
+export type Protocol = "ssh" | "sftp" | "ftp" | "serial" | "local" | "telnet";
 
 export type AuthMethod = "password" | "key" | "agent";
 
@@ -31,6 +31,14 @@ export interface Connection {
   color?: string;
   // SSH extras
   tunnels?: TunnelDef[];
+  // Optional SSH jump host (bastion) — one hop.
+  jumpHost?: string;
+  jumpPort?: number;
+  jumpUsername?: string;
+  jumpAuthMethod?: AuthMethod;
+  jumpPassword?: string;
+  jumpKeyPath?: string;
+  jumpPassphrase?: string;
   // Local terminal: shell id (from local_list_shells), optional working dir,
   // and whether to launch elevated (opens in a separate UAC window).
   shell?: string;
@@ -86,6 +94,7 @@ export const DEFAULT_PORTS: Record<Protocol, number> = {
   ftp: 21,
   serial: 0,
   local: 0,
+  telnet: 23,
 };
 
 export const PROTOCOL_LABELS: Record<Protocol, string> = {
@@ -94,6 +103,7 @@ export const PROTOCOL_LABELS: Record<Protocol, string> = {
   ftp: "FTP",
   serial: "Serial",
   local: "Local",
+  telnet: "Telnet",
 };
 
 export const PROTOCOL_COLORS: Record<Protocol, string> = {
@@ -102,6 +112,7 @@ export const PROTOCOL_COLORS: Record<Protocol, string> = {
   ftp: "#e8a54c",
   serial: "#b78af7",
   local: "#5fd0c5",
+  telnet: "#e87a9c",
 };
 
 export const UNGROUPED = "Ungrouped";

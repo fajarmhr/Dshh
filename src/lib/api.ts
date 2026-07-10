@@ -73,6 +73,35 @@ export const localClose = (id: string) => invoke("local_close", { id });
 export const localOpenAdmin = (shell: string, cwd: string | null) =>
   invoke("local_open_admin", { shell, cwd });
 
+// ---- Telnet ----
+export async function telnetOpen(
+  conn: Connection,
+  onData: ByteHandler,
+  onClosed: (reason: string) => void
+): Promise<string> {
+  const closed = new Channel<string>();
+  closed.onmessage = onClosed;
+  return invoke<string>("telnet_open", {
+    conn,
+    onData: byteChannel(onData),
+    onClosed: closed,
+  });
+}
+export const telnetWrite = (id: string, data: string) => invoke("telnet_write", { id, data });
+export const telnetClose = (id: string) => invoke("telnet_close", { id });
+
+// ---- Remote file editing (SFTP download → local editor → auto re-upload) ----
+export async function editStart(
+  conn: Connection,
+  remote: string,
+  onEvent: (msg: string) => void
+): Promise<string> {
+  const events = new Channel<string>();
+  events.onmessage = onEvent;
+  return invoke<string>("edit_start", { conn, remote, onEvent: events });
+}
+export const editStop = (id: string) => invoke("edit_stop", { id });
+
 // ---- SCP (file copy over the SSH exec channel) ----
 export const scpUpload = (conn: Connection, local: string, remote: string) =>
   invoke("scp_upload", { conn, local, remote });

@@ -45,26 +45,34 @@ pub struct SshSession {
     pub logger: Logger,
 }
 
-/// Establish a TCP+SSH connection and authenticate. Shared by the SSH shell
-/// command and the SFTP module — everything runs in-process via russh.
-pub async fn connect_and_auth(conn: &Connection) -> Result<Handle<ClientHandler>, String> {
-    let host = conn.host.clone().ok_or("Missing host")?;
-    let port = conn.port.unwrap_or(22);
-    let user = conn.username.clone().unwrap_or_default();
+/// An authenticated SSH connection. When the target was reached through a
+/// jump host, the jump connection is owned here too so the tunnel stays up
+/// exactly as long as the target session. Derefs to the russh `Handle`, so
+/// call sites use it like a plain handle.
+pub struct SshHandle {
+    handle: Handle<ClientHandler>,
+    _jump: Option<Box<SshHandle>>,
+}
 
-    let config = Arc::new(client::Config {
+impl std::ops::Deref for SshHandle {
+    type Target = Handle<ClientHandler>;
+    fn deref(&self) -> &Self::Target {
+        &self.handle
+    }
+}
+
+fn ssh_config() -> Arc<client::Config> {
+    Arc::new(client::Config {
         // Protocol-level keepalive so idle sessions survive NAT/firewall
         // timeouts and dead peers are detected instead of hanging forever.
         keepalive_interval: Some(std::time::Duration::from_secs(20)),
         keepalive_max: 3,
         ..client::Config::default()
-    });
-    let connect_fut = client::connect(config, (host.as_str(), port), ClientHandler);
-    let mut handle = tokio::time::timeout(std::time::Duration::from_secs(15), connect_fut)
-        .await
-        .map_err(|_| format!("Connection to {host}:{port} timed out"))?
-        .map_err(|e| format!("Connect failed: {e}"))?;
+    })
+}
 
+async fn authenticate(handle: &mut Handle<ClientHandler>, conn: &Connection) -> Result<(), String> {
+    let user = conn.username.clone().unwrap_or_default();
     let method = conn.auth_method.clone().unwrap_or_else(|| "password".into());
     let auth = match method.as_str() {
         "key" => {
@@ -91,11 +99,69 @@ pub async fn connect_and_auth(conn: &Connection) -> Result<Handle<ClientHandler>
                 .map_err(|e| format!("Auth error: {e}"))?
         }
     };
-
     if !matches!(auth, AuthResult::Success) {
         return Err("Authentication failed".into());
     }
-    Ok(handle)
+    Ok(())
+}
+
+/// Establish an SSH connection and authenticate — directly over TCP, or
+/// through an optional jump host (`ssh -J`): the jump connection opens a
+/// direct-tcpip channel to the target and the target's SSH session runs over
+/// that channel. Shared by the shell, SFTP, SCP, tunnel, and edit modules.
+pub async fn connect_and_auth(conn: &Connection) -> Result<SshHandle, String> {
+    let host = conn.host.clone().ok_or("Missing host")?;
+    let port = conn.port.unwrap_or(22);
+
+    let jump_host = conn.jump_host.clone().unwrap_or_default();
+    if !jump_host.is_empty() {
+        let jump_conn = Connection {
+            id: format!("{}-jump", conn.id),
+            name: format!("{} (jump)", conn.name),
+            protocol: "ssh".into(),
+            host: Some(jump_host.clone()),
+            port: Some(conn.jump_port.unwrap_or(22)),
+            username: conn.jump_username.clone(),
+            auth_method: conn.jump_auth_method.clone(),
+            password: conn.jump_password.clone(),
+            private_key_path: conn.jump_key_path.clone(),
+            passphrase: conn.jump_passphrase.clone(),
+            ftp_secure: None,
+            serial_port: None,
+            baud_rate: None,
+            jump_host: None,
+            jump_port: None,
+            jump_username: None,
+            jump_auth_method: None,
+            jump_password: None,
+            jump_key_path: None,
+            jump_passphrase: None,
+        };
+        // One level only: the synthesized jump connection carries no jump of
+        // its own, so this recursion always bottoms out on the TCP branch.
+        let jump = Box::pin(connect_and_auth(&jump_conn))
+            .await
+            .map_err(|e| format!("Jump host {jump_host}: {e}"))?;
+        let channel = jump
+            .channel_open_direct_tcpip(host.clone(), port as u32, "127.0.0.1", 0)
+            .await
+            .map_err(|e| format!("Jump host cannot reach {host}:{port}: {e}"))?;
+        let connect_fut = client::connect_stream(ssh_config(), channel.into_stream(), ClientHandler);
+        let mut handle = tokio::time::timeout(std::time::Duration::from_secs(15), connect_fut)
+            .await
+            .map_err(|_| format!("Connection to {host}:{port} via jump timed out"))?
+            .map_err(|e| format!("Connect via jump failed: {e}"))?;
+        authenticate(&mut handle, conn).await?;
+        return Ok(SshHandle { handle, _jump: Some(Box::new(jump)) });
+    }
+
+    let connect_fut = client::connect(ssh_config(), (host.as_str(), port), ClientHandler);
+    let mut handle = tokio::time::timeout(std::time::Duration::from_secs(15), connect_fut)
+        .await
+        .map_err(|_| format!("Connection to {host}:{port} timed out"))?
+        .map_err(|e| format!("Connect failed: {e}"))?;
+    authenticate(&mut handle, conn).await?;
+    Ok(SshHandle { handle, _jump: None })
 }
 
 #[tauri::command]

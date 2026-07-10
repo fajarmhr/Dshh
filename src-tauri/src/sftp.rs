@@ -1,6 +1,5 @@
-use crate::ssh::{connect_and_auth, ClientHandler};
+use crate::ssh::{connect_and_auth, SshHandle};
 use crate::{next_id, AppState, Connection, RemoteFile};
-use russh::client::Handle;
 use russh_sftp::client::SftpSession;
 use std::sync::Arc;
 use tauri::State;
@@ -8,8 +7,9 @@ use tokio::io::AsyncWriteExt;
 
 pub struct SftpConn {
     pub sftp: Arc<SftpSession>,
-    // Keep the underlying SSH connection alive for the session's lifetime.
-    _handle: Arc<Handle<ClientHandler>>,
+    // Keep the underlying SSH connection (and any jump hop) alive for the
+    // session's lifetime.
+    _handle: Arc<SshHandle>,
 }
 
 async fn sftp_of(state: &AppState, id: &str) -> Result<Arc<SftpSession>, String> {

@@ -9,7 +9,7 @@ use tokio::net::TcpListener;
 /// whose accepted connections are piped through direct-tcpip channels on a
 /// dedicated SSH connection.
 pub struct TunnelSession {
-    handle: Arc<russh::client::Handle<crate::ssh::ClientHandler>>,
+    handle: Arc<crate::ssh::SshHandle>,
     accept_task: tokio::task::JoinHandle<()>,
 }
 

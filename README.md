@@ -23,7 +23,11 @@ tabbed sessions, saved connection profiles, a real xterm terminal, and a file br
 
 ## Features
 
-- **Multi-protocol tabs** — SSH, SFTP, FTP, and Serial from one window.
+- **Multi-protocol tabs** — SSH, SFTP, FTP, Telnet, and Serial from one window.
+- **SSH jump host** — reach servers behind a bastion (`ssh -J` style, one hop);
+  configure it per connection, password or key auth for the hop.
+- **Multi-execution** — the Broadcast toggle mirrors typed input to every
+  connected terminal at once (MobaXterm-style multi-exec).
 - **Local terminal** — launch **cmd**, **Windows PowerShell**, and (if installed)
   **PowerShell 7 / Git Bash / WSL** in an embedded tab. Open a one-off from the sidebar
   `▾` menu, or save a reusable **Local** profile. **Run as Administrator** elevates through
@@ -31,7 +35,10 @@ tabbed sessions, saved connection profiles, a real xterm terminal, and a file br
 - **Real terminal** — xterm.js with buffer search (`Ctrl+F`), keyword highlighting,
   session recording, and save-to-file. Terminal size stays in lock-step with the remote
   PTY, so cursor editing (`←/→`, history) never smears.
-- **SFTP file browser**, **port forwarding** (`ssh -L` tunnels), and saved-session sync.
+- **SFTP file browser** with drag & drop upload from Explorer and remote file
+  editing — double-click a file to open it in your local editor; every save
+  uploads back automatically. Plus **port forwarding** (`ssh -L` tunnels) and
+  saved-session sync.
 - **SCP transfer** — copy single files to/from a server over SSH (the **SCP** button on an
   SSH tab), for hosts where the SFTP subsystem is disabled but `scp` still works.
   Remote paths may be absolute, `~/`-relative, or plain relative (resolved against home).

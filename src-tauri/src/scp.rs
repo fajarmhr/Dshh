@@ -241,6 +241,13 @@ mod tests {
             ftp_secure: None,
             serial_port: None,
             baud_rate: None,
+            jump_host: None,
+            jump_port: None,
+            jump_username: None,
+            jump_auth_method: None,
+            jump_password: None,
+            jump_key_path: None,
+            jump_passphrase: None,
         }
     }
 
@@ -271,6 +278,36 @@ mod tests {
         .await
         .expect("download failed");
         assert_eq!(std::fs::read(&back).unwrap(), data, "round-trip corrupted data");
+    }
+
+    /// Full jump-host path: connect to the container's sshd as the jump,
+    /// then reach "the target" through it (the same sshd, via its own
+    /// loopback). Exercises direct-tcpip + connect_stream + auth + SCP.
+    #[tokio::test]
+    #[ignore]
+    async fn scp_roundtrip_via_jump_host() {
+        let mut conn = test_conn();
+        conn.host = Some("127.0.0.1".into()); // as seen FROM the jump host
+        conn.port = Some(22);
+        conn.jump_host = Some("127.0.0.1".into());
+        conn.jump_port = Some(2222);
+        conn.jump_username = Some("test".into());
+        conn.jump_auth_method = Some("password".into());
+        conn.jump_password = Some("test123".into());
+
+        let dir = std::env::temp_dir();
+        let local = dir.join("dshh_jump_up.bin");
+        std::fs::write(&local, b"via-jump").unwrap();
+        scp_upload(conn.clone(), local.to_string_lossy().into_owned(), "/home/test/jump.bin".into())
+            .await
+            .expect("upload via jump failed");
+
+        let back = dir.join("dshh_jump_down.bin");
+        let _ = std::fs::remove_file(&back);
+        scp_download(conn, "/home/test/jump.bin".into(), back.to_string_lossy().into_owned())
+            .await
+            .expect("download via jump failed");
+        assert_eq!(std::fs::read(&back).unwrap(), b"via-jump");
     }
 
     #[tokio::test]

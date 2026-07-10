@@ -80,12 +80,21 @@ async function mapSecrets(
   fn: (values: string[]) => Promise<string[]>
 ): Promise<Connection[]> {
   const values: string[] = [];
-  for (const c of conns) values.push(c.password ?? "", c.passphrase ?? "");
+  for (const c of conns) {
+    values.push(
+      c.password ?? "",
+      c.passphrase ?? "",
+      c.jumpPassword ?? "",
+      c.jumpPassphrase ?? ""
+    );
+  }
   const out = await fn(values);
   return conns.map((c, i) => ({
     ...c,
-    password: out[i * 2] || undefined,
-    passphrase: out[i * 2 + 1] || undefined,
+    password: out[i * 4] || undefined,
+    passphrase: out[i * 4 + 1] || undefined,
+    jumpPassword: out[i * 4 + 2] || undefined,
+    jumpPassphrase: out[i * 4 + 3] || undefined,
   }));
 }
 
@@ -150,6 +159,9 @@ interface AppState {
   quickCommands: QuickCommand[];
   /** Running port forwards: tunnel definition id -> backend tunnel id. */
   activeTunnels: Record<string, string>;
+  /** Multi-execution: typed input mirrors to every connected terminal. */
+  broadcastInput: boolean;
+  toggleBroadcast: () => void;
 
   addConnection: (c: Omit<Connection, "id">) => Connection;
   updateConnection: (id: string, patch: Partial<Connection>) => void;
@@ -183,6 +195,9 @@ export const useStore = create<AppState>((set, get) => ({
   settings: loadSettings(),
   quickCommands: loadJson<QuickCommand[]>(QUICKCMD_KEY) ?? [],
   activeTunnels: {},
+  broadcastInput: false,
+
+  toggleBroadcast: () => set({ broadcastInput: !get().broadcastInput }),
 
   addConnection: (c) => {
     const conn: Connection = { ...c, id: nanoid() };
