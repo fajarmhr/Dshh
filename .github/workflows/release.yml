@@ -44,6 +44,9 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force dist-release | Out-Null
           Copy-Item src-tauri/target/release/dshh.exe dist-release/Dshh-portable.exe
+          # Zip is the primary website download (avoids browser warnings on bare
+          # .exe); the raw exe stays published for the in-app self-updater.
+          Compress-Archive -Path dist-release/Dshh-portable.exe -DestinationPath dist-release/Dshh-portable.zip -Force
           Get-ChildItem src-tauri/target/release/bundle/nsis/*-setup.exe -ErrorAction SilentlyContinue | Copy-Item -Destination dist-release/
           Get-ChildItem src-tauri/target/release/bundle/msi/*.msi -ErrorAction SilentlyContinue | Copy-Item -Destination dist-release/
           Get-ChildItem dist-release

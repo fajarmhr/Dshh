@@ -2,6 +2,7 @@ mod crypto;
 mod edit;
 mod ftp;
 mod local;
+mod localfs;
 mod logs;
 mod scp;
 mod serial;
@@ -45,6 +46,7 @@ pub struct Connection {
 
 /// A file entry returned to the frontend for SFTP/FTP browsing.
 #[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RemoteFile {
     pub name: String,
     pub path: String,
@@ -102,6 +104,8 @@ pub fn run() {
             local::local_resize,
             local::local_close,
             local::local_open_admin,
+            localfs::local_fs_home,
+            localfs::local_fs_list,
             scp::scp_upload,
             scp::scp_download,
             sftp::sftp_connect,

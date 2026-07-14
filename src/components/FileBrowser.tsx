@@ -7,10 +7,12 @@ import {
   Download,
   Upload,
   Folder,
-  File as FileIcon,
+  Columns2,
   HardDrive,
   Pencil,
 } from "lucide-react";
+import { LocalPane } from "./LocalPane";
+import { FileTypeIcon } from "../lib/fileIcons";
 import { useStore } from "../store";
 import {
   sftpConnect,
@@ -43,7 +45,9 @@ export function FileBrowser({
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string>("");
   const [dragOver, setDragOver] = useState(false);
+  const [showLocal, setShowLocal] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const remoteRef = useRef<HTMLDivElement>(null);
   // Latest values for the long-lived drag-drop subscription.
   const dropCtx = useRef({ backendId: null as string | null, cwd, isSftp });
   dropCtx.current = { backendId, cwd, isSftp };
@@ -112,7 +116,17 @@ export function FileBrowser({
 
   const download = async (f: RemoteFile) => {
     if (!backendId || f.isDir) return;
-    const local = await saveDialog({ defaultPath: f.name });
+    // Offer the file's own type in the save dialog so Windows keeps the
+    // original extension instead of defaulting to "All files".
+    const dot = f.name.lastIndexOf(".");
+    const ext = dot > 0 ? f.name.slice(dot + 1) : "";
+    const local = await saveDialog({
+      defaultPath: f.name,
+      filters: [
+        ...(ext ? [{ name: `${ext.toUpperCase()} file`, extensions: [ext] }] : []),
+        { name: "All files", extensions: ["*"] },
+      ],
+    });
     if (!local) return;
     setBusy(true);
     setMsg(`Downloading ${f.name}…`);
@@ -164,11 +178,26 @@ export function FileBrowser({
     await uploadPaths(Array.isArray(picked) ? picked : [picked]);
   };
 
+  // Download a remote file into a local directory (drop on the local pane).
+  const downloadTo = useCallback(
+    async (file: { path: string; name: string }, dir: string) => {
+      const { backendId: id, isSftp: sftp } = dropCtx.current;
+      if (!id) return;
+      const sep = /^[A-Za-z]:/.test(dir) || dir.includes("\\") ? "\\" : "/";
+      const local =
+        dir.endsWith("\\") || dir.endsWith("/") ? dir + file.name : dir + sep + file.name;
+      sftp
+        ? await sftpDownload(id, file.path, local)
+        : await ftpDownload(id, file.path, local);
+    },
+    []
+  );
+
   // Drag & drop from Explorer: upload into the current directory. The event
   // is window-global, so only react while the pointer is over this pane.
   useEffect(() => {
     const inBounds = (pos: { x: number; y: number }) => {
-      const el = rootRef.current;
+      const el = remoteRef.current;
       if (!el) return false;
       const scale = window.devicePixelRatio || 1;
       const r = el.getBoundingClientRect();
@@ -207,7 +236,30 @@ export function FileBrowser({
   };
 
   return (
-    <div ref={rootRef} className="relative flex h-full flex-col bg-bg-base">
+    <div ref={rootRef} className="flex h-full bg-bg-base">
+      {showLocal && <LocalPane onRemoteDrop={downloadTo} />}
+      <div
+        ref={remoteRef}
+        className="relative flex h-full min-w-0 flex-1 flex-col"
+        onDragOver={(e) => {
+          if (e.dataTransfer.types.includes("application/x-dshh-local")) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = "copy";
+            setDragOver(true);
+          }
+        }}
+        onDragLeave={(e) => {
+          if (!remoteRef.current?.contains(e.relatedTarget as Node)) setDragOver(false);
+        }}
+        onDrop={(e) => {
+          const raw = e.dataTransfer.getData("application/x-dshh-local");
+          setDragOver(false);
+          if (!raw) return;
+          e.preventDefault();
+          const file = JSON.parse(raw) as { path: string };
+          uploadPaths([file.path]);
+        }}
+      >
       {dragOver && (
         <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center rounded-lg border-2 border-dashed border-accent bg-accent/10">
           <span className="rounded-md bg-bg-panel px-3 py-1.5 font-mono text-xs text-accent">
@@ -216,6 +268,13 @@ export function FileBrowser({
         </div>
       )}
       <div className="flex h-9 shrink-0 items-center gap-1 border-b border-edge bg-bg-panel px-2">
+        <button
+          onClick={() => setShowLocal((v) => !v)}
+          className={`tb-btn ${showLocal ? "text-accent" : ""}`}
+          title="Split view: local disk pane for drag & drop"
+        >
+          <Columns2 size={15} />
+        </button>
         <button onClick={goUp} className="tb-btn" title="Up one directory">
           <ArrowUp size={15} />
         </button>
@@ -257,6 +316,14 @@ export function FileBrowser({
                 <tr
                   key={f.path}
                   onDoubleClick={() => enter(f)}
+                  draggable={!f.isDir}
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData(
+                      "application/x-dshh-remote",
+                      JSON.stringify({ path: f.path, name: f.name })
+                    );
+                    e.dataTransfer.effectAllowed = "copy";
+                  }}
                   className="group cursor-default border-b border-edge/40 transition hover:bg-bg-hover"
                 >
                   <td className="px-3 py-1.5">
@@ -264,7 +331,7 @@ export function FileBrowser({
                       {f.isDir ? (
                         <Folder size={15} className="shrink-0 text-warn" />
                       ) : (
-                        <FileIcon size={15} className="shrink-0 text-ink-dim" />
+                        <FileTypeIcon name={f.name} />
                       )}
                       <span className="truncate text-ink-hi">{f.name}</span>
                     </div>
@@ -308,6 +375,7 @@ export function FileBrowser({
         <span className="truncate font-mono text-[10.5px] text-ink-dim">
           {msg || `${files.length} items`}
         </span>
+      </div>
       </div>
     </div>
   );

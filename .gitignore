@@ -9,6 +9,9 @@
 # Distributables (share via GitHub Releases, not the repo)
 /share
 
+# Old design handoffs / scratch drops (kept locally, not in the repo)
+/updates
+
 # Logs & scratch
 *.log
 app-icon.png

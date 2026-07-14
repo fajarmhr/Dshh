@@ -78,22 +78,145 @@ document.querySelectorAll("[data-reset-demo]").forEach((b) =>
 );
 setDemo("idle");
 
-// --- Live latest release from GitHub (keeps download links current) ---
+// --- Live releases from GitHub (download links + changelog stay current) ---
 interface Release {
   tag_name?: string;
+  name?: string;
   html_url?: string;
+  body?: string;
+  published_at?: string;
+  draft?: boolean;
+  prerelease?: boolean;
   assets?: { name?: string; browser_download_url?: string }[];
 }
 const downloadLinks = document.querySelectorAll<HTMLAnchorElement>("[data-download]");
 const liveNotes = document.querySelectorAll<HTMLElement>("[data-live-note]");
-fetch(`https://api.github.com/repos/${REPO}/releases/latest`)
-  .then((r) => (r.ok ? (r.json() as Promise<Release>) : Promise.reject(new Error("HTTP " + r.status))))
-  .then((j) => {
-    const exe = (j.assets || []).find((a) => /\.exe$/i.test(a.name || ""));
-    const url = exe?.browser_download_url || j.html_url;
+
+function el(
+  tag: string,
+  style: string,
+  text?: string,
+  cls?: string
+): HTMLElement {
+  const e = document.createElement(tag);
+  if (style) e.setAttribute("style", style);
+  if (cls) e.className = cls;
+  if (text) e.textContent = text;
+  return e;
+}
+
+function monthYear(iso?: string): string {
+  if (!iso) return "";
+  return new Date(iso)
+    .toLocaleDateString("en-US", { month: "short", year: "numeric" })
+    .toLowerCase();
+}
+
+/** Pull display bullets out of a release body (handles GitHub's
+ *  auto-generated notes: markdown links, "by @user in <url>" tails). */
+function bullets(body: string): string[] {
+  return body
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => /^[-*] /.test(l))
+    .map((l) =>
+      l
+        .replace(/^[-*] /, "")
+        .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+        .replace(/ by @[\w-]+ in \S+$/, "")
+        .replace(/\*\*/g, "")
+        .trim()
+    )
+    .filter(Boolean);
+}
+
+const MONO = "'JetBrains Mono',monospace";
+
+function renderChangelog(rels: Release[]): void {
+  const root = document.querySelector<HTMLElement>("[data-changelog]");
+  if (!root || rels.length === 0) return;
+  // Keep the hand-written body for releases whose GitHub notes are empty —
+  // the curated static entry reads better than a bare link.
+  const staticBodies = new Map<string, HTMLElement>();
+  root.querySelectorAll<HTMLElement>(":scope > .clog").forEach((c) => {
+    const tag = c.querySelector(".clog-v span")?.textContent?.trim();
+    const body = c.querySelector<HTMLElement>(".clog-body");
+    if (tag && body) staticBodies.set(tag, body);
+  });
+  const out: HTMLElement[] = [];
+  rels.forEach((rel, i) => {
+    const entry = el("div", "", undefined, "clog");
+    const left = el("div", "", undefined, "clog-v");
+    const tagRow = el("div", "display:flex;align-items:center;gap:8px;");
+    tagRow.appendChild(
+      el("span", `font-family:${MONO};font-size:13px;font-weight:600;color:#5b8cff;`, rel.tag_name || "")
+    );
+    if (i === 0)
+      tagRow.appendChild(
+        el(
+          "span",
+          `border-radius:5px;background:rgba(62,207,142,0.1);padding:1px 7px;font-family:${MONO};font-size:10px;color:#3ecf8e;`,
+          "latest"
+        )
+      );
+    left.appendChild(tagRow);
+    left.appendChild(el("div", "", monthYear(rel.published_at), "clog-d"));
+    entry.appendChild(left);
+
+    const items = bullets(rel.body || "");
+    const staticBody = staticBodies.get(rel.tag_name || "");
+    let body: HTMLElement;
+    if (items.length === 0 && staticBody) {
+      body = staticBody.cloneNode(true) as HTMLElement;
+    } else {
+      body = el("div", "", undefined, "clog-body");
+      const heading =
+        rel.name && rel.name !== rel.tag_name ? rel.name : `Release ${rel.tag_name || ""}`;
+      body.appendChild(el("div", "", heading, "clog-h"));
+      if (items.length > 0) {
+        const ul = el("ul", "", undefined, "clog-ul");
+        items.forEach((b) => ul.appendChild(el("li", "", b)));
+        body.appendChild(ul);
+      } else {
+        const wrap = el("div", "margin-top:6px;font-size:14px;color:#5a6878;");
+        const link = el("a", "color:#7ca4ff;", "release notes on github ↗") as HTMLAnchorElement;
+        const url = rel.html_url || `https://github.com/${REPO}/releases`;
+        if (/^https:\/\/github\.com\//.test(url)) link.href = url;
+        link.target = "_blank";
+        link.rel = "noopener";
+        wrap.appendChild(link);
+        body.appendChild(wrap);
+      }
+    }
+    entry.appendChild(body);
+    out.push(entry);
+  });
+  root.replaceChildren(...out);
+}
+
+fetch(`https://api.github.com/repos/${REPO}/releases?per_page=10`)
+  .then((r) => (r.ok ? (r.json() as Promise<Release[]>) : Promise.reject(new Error("HTTP " + r.status))))
+  .then((all) => {
+    const rels = all.filter((r) => !r.draft && !r.prerelease);
+    const latest = rels[0];
+    if (!latest) throw new Error("no releases");
+    const assets = latest.assets || [];
+    const pick = (re: RegExp) =>
+      assets.find((a) => re.test(a.name || ""))?.browser_download_url;
+    const url =
+      pick(/^Dshh-portable\.zip$/i) || pick(/\.zip$/i) || pick(/\.exe$/i) || latest.html_url;
     if (url) downloadLinks.forEach((a) => (a.href = url));
-    const tag = j.tag_name || "";
-    if (tag) liveNotes.forEach((n) => (n.textContent = `latest on github: ${tag}`));
+    const tag = latest.tag_name || "";
+    if (tag) {
+      liveNotes.forEach((n) => (n.textContent = `latest on github: ${tag}`));
+      document
+        .querySelectorAll<HTMLElement>("[data-latest-ver]")
+        .forEach((e) => (e.textContent = tag));
+      document
+        .querySelectorAll<HTMLElement>("[data-latest-title]")
+        .forEach((e) => (e.textContent = `Dshh ${tag.replace(/^v/i, "")} — portable`));
+    }
+    renderChangelog(rels);
   })
   .catch(() => {
     liveNotes.forEach((n) => (n.textContent = "releases: github.com/fajarmhr/Dshh/releases"));

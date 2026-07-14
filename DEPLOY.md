@@ -67,7 +67,9 @@ it uses the built-in `GITHUB_TOKEN`.
    git push origin main --tags
    ```
 3. The **Release** workflow runs and publishes a release containing:
-   - `Dshh-portable.exe` — copy-and-run, no install (needs WebView2, preinstalled on Win10/11)
+   - `Dshh-portable.zip` — the primary website download (unzip & run; avoids
+     browser warnings on bare executables)
+   - `Dshh-portable.exe` — same build, unzipped; kept for the in-app self-updater
    - `Dshh_<ver>_x64-setup.exe` — NSIS installer
    - `Dshh_<ver>_x64_en-US.msi` — MSI installer
 
@@ -78,7 +80,7 @@ You can also trigger it manually from the **Actions** tab (`workflow_dispatch`).
 Point the site's download button here — it always resolves to the newest release:
 
 ```
-https://github.com/fajarmhr/Dshh/releases/latest/download/Dshh-portable.exe
+https://github.com/fajarmhr/Dshh/releases/latest/download/Dshh-portable.zip
 ```
 
 ### Local build (no CI)

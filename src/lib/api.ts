@@ -73,6 +73,11 @@ export const localClose = (id: string) => invoke("local_close", { id });
 export const localOpenAdmin = (shell: string, cwd: string | null) =>
   invoke("local_open_admin", { shell, cwd });
 
+// ---- Local filesystem (dual-pane drag & drop in the file browser) ----
+export const localFsHome = () => invoke<string>("local_fs_home");
+export const localFsList = (path: string) =>
+  invoke<RemoteFile[]>("local_fs_list", { path });
+
 // ---- Telnet ----
 export async function telnetOpen(
   conn: Connection,
