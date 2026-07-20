@@ -12,10 +12,13 @@ Two independent targets:
 The site is a static SPA that builds to `website/dist/`. Cloudflare Pages serves
 that folder for free.
 
-> ⚠️ **Only the built `website/dist/` currently exists — the site's source
-> (`website/src`, `package.json`, `vite.config.ts`) was lost.** You can deploy
-> the existing `dist/` right now, but to *edit and rebuild* the site the source
-> must be restored first (ask Claude: "restore the website source").
+To rebuild after editing the source:
+
+```powershell
+cd website
+npm install   # first time only
+npm run build
+```
 
 ### One-time setup
 

@@ -58,12 +58,7 @@ pub async fn serial_open(
             match reader.read(&mut buf) {
                 Ok(0) => std::thread::sleep(Duration::from_millis(5)),
                 Ok(n) => {
-                    if let Ok(mut guard) = logger_reader.lock() {
-                        if let Some(file) = guard.as_mut() {
-                            let _ = file.write_all(&buf[..n]);
-                            let _ = file.flush();
-                        }
-                    }
+                    crate::logs::log_bytes(&logger_reader, &buf[..n]);
                     if on_data.send(buf[..n].to_vec()).is_err() {
                         break;
                     }

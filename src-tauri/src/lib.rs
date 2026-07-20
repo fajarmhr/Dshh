@@ -55,9 +55,10 @@ pub struct RemoteFile {
     pub modified: Option<i64>,
 }
 
-/// Shared handle to an optional open log file for a streaming session.
-/// `None` means logging is off; `Some(file)` means bytes are being recorded.
-pub type Logger = std::sync::Arc<std::sync::Mutex<Option<std::fs::File>>>;
+/// Shared handle to an optional session log for a streaming session.
+/// `None` means logging is off; `Some(sink)` means output is being recorded
+/// (filtered to readable plain text by [`logs::LogSink`]).
+pub type Logger = std::sync::Arc<std::sync::Mutex<Option<logs::LogSink>>>;
 
 pub fn new_logger() -> Logger {
     std::sync::Arc::new(std::sync::Mutex::new(None))

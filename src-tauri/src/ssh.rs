@@ -2,22 +2,12 @@ use crate::{next_id, AppState, Connection, Logger};
 use russh::client::{self, AuthResult, Handle, Handler};
 use russh::keys::*;
 use russh::ChannelMsg;
-use std::io::Write;
 use std::sync::Arc;
 use tauri::ipc::Channel;
 use tauri::State;
 use tokio::sync::mpsc;
 
-/// Append bytes to a session log if one is active. Flushes each write so the
-/// log survives a crash.
-fn log_bytes(logger: &Logger, data: &[u8]) {
-    if let Ok(mut guard) = logger.lock() {
-        if let Some(file) = guard.as_mut() {
-            let _ = file.write_all(data);
-            let _ = file.flush();
-        }
-    }
-}
+use crate::logs::log_bytes;
 
 /// russh client handler. We accept the host key on first use (TOFU-style).
 /// A production build would persist and verify known-hosts here.

@@ -1,5 +1,5 @@
+use crate::logs::log_bytes;
 use crate::{next_id, AppState, Connection, Logger};
-use std::io::Write;
 use tauri::ipc::Channel;
 use tauri::State;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -92,15 +92,6 @@ impl Negotiator {
                     self.state = if b == SE { NegState::Data } else { NegState::Sub };
                 }
             }
-        }
-    }
-}
-
-fn log_bytes(logger: &Logger, data: &[u8]) {
-    if let Ok(mut guard) = logger.lock() {
-        if let Some(file) = guard.as_mut() {
-            let _ = file.write_all(data);
-            let _ = file.flush();
         }
     }
 }
