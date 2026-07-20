@@ -33,7 +33,8 @@ wrangler login         # opens the browser, authorises your Cloudflare account
 npx wrangler pages deploy website/dist --project-name=dshh
 ```
 
-- First run creates the project and prints your URL: `https://dshh.pages.dev`.
+- First run creates the project and prints your URL — the live site is
+  `https://dshh-1ud.pages.dev`.
 - Re-run the same command to publish updates.
 - **Custom domain:** Cloudflare dashboard → Workers & Pages → `dshh` → Custom domains.
 
