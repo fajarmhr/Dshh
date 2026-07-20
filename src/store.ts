@@ -29,11 +29,31 @@ export interface Settings {
   sessionsDir: string;
   highlightEnabled: boolean;
   highlightRules: HighlightRule[];
+  /** Highest default-rule set merged into highlightRules (see loadSettings). */
+  rulesVersion: number;
   /** Master-password KDF salt (base64). Empty = no master password set. */
   masterSalt: string;
   /** Verifier blob used to check an entered master password. */
   masterCheck: string;
 }
+
+/** Rules added in 0.5.1 — kept separate so the loader can append exactly
+ *  these to an existing install without resurrecting user-deleted rules. */
+const RULES_ADDED_V2: HighlightRule[] = [
+  { id: "hl-fatal", pattern: "fatal", color: "red" },
+  { id: "hl-critical", pattern: "critical", color: "red" },
+  { id: "hl-refused", pattern: "refused", color: "red" },
+  { id: "hl-exception", pattern: "exception", color: "red" },
+  { id: "hl-deprecated", pattern: "deprecated", color: "yellow" },
+  { id: "hl-timeout", pattern: "timeout", color: "yellow" },
+  { id: "hl-retrying", pattern: "retrying", color: "yellow" },
+  { id: "hl-completed", pattern: "completed", color: "green" },
+  { id: "hl-established", pattern: "established", color: "green" },
+  { id: "hl-accepted", pattern: "accepted", color: "green" },
+  { id: "hl-listening", pattern: "listening", color: "cyan" },
+];
+
+const RULES_VERSION = 2;
 
 const DEFAULT_HIGHLIGHT_RULES: HighlightRule[] = [
   { id: "hl-error", pattern: "error", color: "red" },
@@ -41,6 +61,7 @@ const DEFAULT_HIGHLIGHT_RULES: HighlightRule[] = [
   { id: "hl-denied", pattern: "denied", color: "red" },
   { id: "hl-warning", pattern: "warning", color: "yellow" },
   { id: "hl-success", pattern: "success", color: "green" },
+  ...RULES_ADDED_V2,
 ];
 
 const DEFAULT_SETTINGS: Settings = {
@@ -49,6 +70,7 @@ const DEFAULT_SETTINGS: Settings = {
   sessionsDir: "",
   highlightEnabled: true,
   highlightRules: DEFAULT_HIGHLIGHT_RULES,
+  rulesVersion: RULES_VERSION,
   masterSalt: "",
   masterCheck: "",
 };
@@ -64,7 +86,19 @@ function loadJson<T>(key: string): T | null {
 }
 
 function loadSettings(): Settings {
-  return { ...DEFAULT_SETTINGS, ...(loadJson<Partial<Settings>>(SETTINGS_KEY) ?? {}) };
+  const saved = loadJson<Partial<Settings>>(SETTINGS_KEY) ?? {};
+  const s = { ...DEFAULT_SETTINGS, ...saved };
+  // Releases can grow the default highlight set. Append only the rules the
+  // saved install predates, so rules the user deleted stay deleted.
+  if (saved.highlightRules && (saved.rulesVersion ?? 1) < RULES_VERSION) {
+    const have = new Set(saved.highlightRules.map((r) => r.id));
+    s.highlightRules = [
+      ...saved.highlightRules,
+      ...RULES_ADDED_V2.filter((r) => !have.has(r.id)),
+    ];
+  }
+  s.rulesVersion = RULES_VERSION;
+  return s;
 }
 
 function sessionsFilePath(dir: string): string {
