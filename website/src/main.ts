@@ -203,8 +203,9 @@ fetch(`https://api.github.com/repos/${REPO}/releases?per_page=10`)
     const assets = latest.assets || [];
     const pick = (re: RegExp) =>
       assets.find((a) => re.test(a.name || ""))?.browser_download_url;
-    const url =
-      pick(/^Dshh-portable\.zip$/i) || pick(/\.zip$/i) || pick(/\.exe$/i) || latest.html_url;
+    // Zip only — never hand the browser a bare .exe (SmartScreen warnings);
+    // if a release somehow has no zip, send people to the release page.
+    const url = pick(/^Dshh-portable\.zip$/i) || pick(/\.zip$/i) || latest.html_url;
     if (url) downloadLinks.forEach((a) => (a.href = url));
     const tag = latest.tag_name || "";
     if (tag) {
