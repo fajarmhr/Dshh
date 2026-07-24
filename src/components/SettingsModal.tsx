@@ -19,6 +19,7 @@ import {
   type UpdateInfo,
 } from "../lib/api";
 import type { HighlightColor, HighlightRule } from "../lib/types";
+import { overlayDismiss } from "../lib/utils";
 
 const HL_COLORS: Record<HighlightColor, string> = {
   red: "#f26d78",
@@ -177,7 +178,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay" {...overlayDismiss(onClose)}>
       <div className="modal-shell w-[480px]" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-edge px-5 py-3">
           <h2 className="text-sm font-semibold text-ink-hi">Settings</h2>

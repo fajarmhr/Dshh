@@ -150,7 +150,9 @@ export function FileBrowser({
       let ok = 0;
       let lastErr = "";
       for (const p of paths) {
-        const name = p.split(/[\/]/).pop()!;
+        // Windows paths use "\", so split on both separators — otherwise the
+        // whole local path gets baked into the remote file name.
+        const name = p.split(/[\\/]/).pop()!;
         const remote = (dir.endsWith("/") ? dir : dir + "/") + name;
         setMsg(`Uploading ${name}…`);
         try {

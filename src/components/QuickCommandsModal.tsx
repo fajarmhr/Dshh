@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Plus, Trash2, X } from "lucide-react";
 import { useStore } from "../store";
+import { overlayDismiss } from "../lib/utils";
 
 export function QuickCommandsModal({ onClose }: { onClose: () => void }) {
   const quickCommands = useStore((s) => s.quickCommands);
@@ -19,7 +20,7 @@ export function QuickCommandsModal({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay" {...overlayDismiss(onClose)}>
       <div className="modal-shell w-[560px]" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-edge px-5 py-3">
           <h2 className="text-sm font-semibold text-ink-hi">Quick commands</h2>

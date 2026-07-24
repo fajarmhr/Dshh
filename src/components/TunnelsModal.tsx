@@ -4,7 +4,7 @@ import { nanoid } from "nanoid";
 import { useStore } from "../store";
 import { tunnelStart, tunnelStop } from "../lib/api";
 import type { Connection, TunnelDef } from "../lib/types";
-import { cn } from "../lib/utils";
+import { cn, overlayDismiss } from "../lib/utils";
 
 /**
  * Local port forwards (`ssh -L`) for one connection. Definitions persist on
@@ -87,7 +87,7 @@ export function TunnelsModal({
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay" {...overlayDismiss(onClose)}>
       <div className="modal-shell w-[560px]" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-edge px-5 py-3">
           <div>

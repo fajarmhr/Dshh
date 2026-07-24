@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { X, RefreshCw } from "lucide-react";
 import { useStore } from "../store";
 import { serialListPorts, localListShells } from "../lib/api";
+import { overlayDismiss } from "../lib/utils";
 import {
   DEFAULT_PORTS,
   PROTOCOL_COLORS,
@@ -137,7 +138,7 @@ export function ConnectionModal({
   const isSshLike = form.protocol === "ssh" || form.protocol === "sftp";
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay" {...overlayDismiss(onClose)}>
       <div className="modal-shell w-[460px]" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-edge px-5 py-3">
           <h2 className="text-sm font-semibold text-ink-hi">

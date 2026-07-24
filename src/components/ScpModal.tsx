@@ -3,6 +3,7 @@ import { ArrowDownToLine, ArrowUpFromLine, X } from "lucide-react";
 import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { scpUpload, scpDownload } from "../lib/api";
 import type { Connection } from "../lib/types";
+import { overlayDismiss } from "../lib/utils";
 
 /**
  * SCP file transfer for one SSH connection. Each transfer opens its own SSH
@@ -67,7 +68,7 @@ export function ScpModal({
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay" {...overlayDismiss(onClose)}>
       <div className="modal-shell w-[560px]" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-edge px-5 py-3">
           <div>
