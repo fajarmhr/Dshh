@@ -17,9 +17,11 @@ Every protocol is implemented *inside this app's own executable* using Rust crat
 | Serial         | `serialport`            |
 | Local terminal | `portable-pty` (ConPTY) |
 
-No child process named `ssh.exe` / `sftp.exe` / `ftp.exe` is ever spawned — the app is
-a single process (`dshh.exe`). This also makes it far nicer to use than raw PowerShell:
-tabbed sessions, saved connection profiles, a real xterm terminal, and a file browser.
+Nothing is shelled out to an external client and nothing has to be on your `PATH`:
+`dshh.exe` opens the sockets, negotiates each transport and drives the PTY itself, as a
+single process. That also makes it considerably more pleasant than a bare PowerShell
+prompt — tabbed sessions, saved connection profiles, a real xterm terminal, and a file
+browser.
 
 ## Features
 

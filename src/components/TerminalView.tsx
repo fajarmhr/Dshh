@@ -44,6 +44,7 @@ import {
   unregisterTerminal,
 } from "../lib/terminalRegistry";
 import { applyHighlights, compileRules, type CompiledRule } from "../lib/highlight";
+import { resolveTheme } from "../lib/themes";
 import { TunnelsModal } from "./TunnelsModal";
 import { ScpModal } from "./ScpModal";
 import type { Connection, Session } from "../lib/types";
@@ -95,6 +96,7 @@ export function TerminalView({
   const isSsh = session.protocol === "ssh";
   const isLocal = session.protocol === "local";
   const isTelnet = session.protocol === "telnet";
+  const isSerial = session.protocol === "serial";
   const broadcastInput = useStore((s) => s.broadcastInput);
   const toggleBroadcast = useStore((s) => s.toggleBroadcast);
   // Both SSH and local run over a PTY, so both need window-size sync.
@@ -105,6 +107,51 @@ export function TerminalView({
     () => (liveConn.tunnels ?? []).filter((t) => activeTunnels[t.id]).length,
     [liveConn.tunnels, activeTunnels]
   );
+
+  // Terminal look, with per-connection overrides winning over the global
+  // preference — that is what lets one host be marked out with its own palette.
+  const appearance = useMemo(
+    () => ({
+      fontFamily: settings.fontFamily,
+      fontSize: liveConn.fontSize ?? settings.fontSize,
+      lineHeight: settings.lineHeight,
+      cursorStyle: settings.cursorStyle,
+      cursorBlink: settings.cursorBlink,
+      scrollback: settings.scrollback,
+      theme: resolveTheme(liveConn.themeId ?? settings.themeId).colors,
+    }),
+    [
+      settings.fontFamily,
+      settings.fontSize,
+      settings.lineHeight,
+      settings.cursorStyle,
+      settings.cursorBlink,
+      settings.scrollback,
+      settings.themeId,
+      liveConn.fontSize,
+      liveConn.themeId,
+    ]
+  );
+  // Read by the mount effect, which must not re-run when appearance changes —
+  // rebuilding the Terminal would drop the scrollback and the live connection.
+  const appearanceRef = useRef(appearance);
+  appearanceRef.current = appearance;
+
+  // Push appearance changes onto the live terminal instead of recreating it.
+  // Font metrics drive the column count, so a size change has to re-fit and
+  // re-notify the remote PTY or the shell keeps wrapping at the old width.
+  useEffect(() => {
+    const term = termRef.current;
+    if (!term) return;
+    term.options.fontFamily = appearance.fontFamily;
+    term.options.fontSize = appearance.fontSize;
+    term.options.lineHeight = appearance.lineHeight;
+    term.options.cursorStyle = appearance.cursorStyle;
+    term.options.cursorBlink = appearance.cursorBlink;
+    term.options.scrollback = appearance.scrollback;
+    term.options.theme = appearance.theme;
+    syncSize();
+  }, [appearance]);
 
   // Highlight rules live in a ref so the byte pipeline reads the latest
   // settings without re-connecting.
@@ -228,6 +275,16 @@ export function TerminalView({
       lastSizeRef.current = { cols: 0, rows: 0 };
       pushResize();
 
+      // MobaXterm-style "execute on login". Serial has no shell to greet us,
+      // and a remote prompt needs a beat to appear, so give it one before
+      // typing — otherwise the line lands mid-banner and gets eaten.
+      const onLogin = liveConn.runOnConnect?.trim();
+      if (onLogin && !isSerial) {
+        setTimeout(() => {
+          if (!life.dead && backendId.current === id) writeBackend(`${onLogin}\r`);
+        }, 400);
+      }
+
       const st = useStore.getState().settings;
       if (st.autoLog && st.logDir) {
         const path = autoLogPath(st.logDir, conn.name);
@@ -254,40 +311,10 @@ export function TerminalView({
     const life = { dead: false };
     lifeRef.current = life;
 
-    const term = new Terminal({
-      fontFamily:
-        '"JetBrains Mono Variable", "Cascadia Code", Consolas, monospace',
-      fontSize: 13,
-      lineHeight: 1.2,
-      cursorBlink: true,
-      scrollback: 10000,
-      allowProposedApi: true,
-      // Slightly more saturated than the app chrome so colored output (ls,
-      // htop, log levels) reads vividly — without neon-poster territory.
-      theme: {
-        background: "#070a0f",
-        foreground: "#dde6f0",
-        cursor: "#5b8cff",
-        cursorAccent: "#070a0f",
-        selectionBackground: "#2a3550",
-        black: "#0a0e14",
-        red: "#ff6e78",
-        green: "#34e08d",
-        yellow: "#ffb454",
-        blue: "#66a2ff",
-        magenta: "#c58fff",
-        cyan: "#3fd5f0",
-        white: "#dde6f0",
-        brightBlack: "#6b7a8c",
-        brightRed: "#ff98a0",
-        brightGreen: "#6ceeae",
-        brightYellow: "#ffce7a",
-        brightBlue: "#8fb5ff",
-        brightMagenta: "#dcb5ff",
-        brightCyan: "#8ae8f8",
-        brightWhite: "#f2f7fc",
-      },
-    });
+    // Read through the ref: this effect must not re-run on appearance changes
+    // (that would tear down the connection), so a separate effect pushes later
+    // edits onto the live terminal.
+    const term = new Terminal({ ...appearanceRef.current, allowProposedApi: true });
     const fit = new FitAddon();
     const search = new SearchAddon();
     term.loadAddon(fit);

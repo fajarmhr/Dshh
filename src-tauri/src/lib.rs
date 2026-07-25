@@ -4,6 +4,7 @@ mod ftp;
 mod local;
 mod localfs;
 mod logs;
+mod portable;
 mod scp;
 mod serial;
 mod sftp;
@@ -94,6 +95,10 @@ pub fn next_id(prefix: &str) -> String {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Must precede the builder: WebView2 reads its user-data folder from the
+    // environment when the webview is created, and that folder is where
+    // localStorage — settings, saved connections — actually lives.
+    portable::init();
     update::cleanup_stale_update();
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -149,6 +154,7 @@ pub fn run() {
             update::update_apply,
             update::update_restart,
             update::open_url,
+            portable::portable_data_dir,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Dshh");

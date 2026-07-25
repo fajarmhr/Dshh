@@ -2,10 +2,19 @@ export type Protocol = "ssh" | "sftp" | "ftp" | "serial" | "local" | "telnet";
 
 export type AuthMethod = "password" | "key" | "agent";
 
-/** A saved local port forward (`ssh -L`) attached to a connection. */
+/**
+ * Which direction a forward runs, mirroring OpenSSH's flags:
+ * `local` = `-L`, `remote` = `-R`, `dynamic` = `-D` (a SOCKS5 proxy).
+ */
+export type TunnelKind = "local" | "remote" | "dynamic";
+
+/** A saved port forward attached to a connection. */
 export interface TunnelDef {
   id: string;
+  /** Absent on tunnels saved before 0.6 — read those as local forwards. */
+  kind?: TunnelKind;
   localPort: number;
+  /** Unused for `dynamic`, where the client picks the destination per request. */
   remoteHost: string;
   remotePort: number;
 }
@@ -28,7 +37,15 @@ export interface Connection {
   // Serial
   serialPort?: string;
   baudRate?: number;
+  // Presentation: an accent colour (sidebar bar, tab underline) and free-form
+  // tags, so "am I on prod?" is answerable at a glance.
   color?: string;
+  tags?: string[];
+  /** Sent once the shell is ready, like MobaXterm's "execute on login". */
+  runOnConnect?: string;
+  // Per-session terminal overrides; fall back to the global settings.
+  themeId?: string;
+  fontSize?: number;
   // SSH extras
   tunnels?: TunnelDef[];
   // Optional SSH jump host (bastion) — one hop.
@@ -84,6 +101,31 @@ export interface QuickCommand {
   label: string;
   command: string;
 }
+
+/** Terminal cursor shape, matching xterm.js's `cursorStyle`. */
+export type CursorStyle = "block" | "bar" | "underline";
+
+/**
+ * A recorded sequence of commands replayed into a terminal (MobaXterm's macro
+ * recorder). Quick commands are one-shot; a macro is the multi-step version.
+ */
+export interface Macro {
+  id: string;
+  label: string;
+  steps: string[];
+}
+
+/** Accent colours offered for a connection, tuned to the app's palette. */
+export const CONNECTION_COLORS: string[] = [
+  "#5b8cff",
+  "#3ecf8e",
+  "#e8a54c",
+  "#f26d78",
+  "#b78af7",
+  "#5fd0c5",
+  "#e87a9c",
+  "#94a3b8",
+];
 
 export type HighlightColor = "red" | "yellow" | "green" | "blue" | "magenta" | "cyan";
 

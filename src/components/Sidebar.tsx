@@ -12,8 +12,11 @@ import {
   Copy,
   ChevronDown,
   ChevronRight,
+  Search,
+  X,
   Settings as SettingsIcon,
 } from "lucide-react";
+import { buildFilter } from "../lib/utils";
 import { useStore } from "../store";
 import { localOpenAdmin } from "../lib/api";
 import { LocalLauncher } from "./LocalLauncher";
@@ -62,7 +65,12 @@ export function Sidebar({
   const openSession = useStore((s) => s.openSession);
   const removeConnection = useStore((s) => s.removeConnection);
   const duplicateConnection = useStore((s) => s.duplicateConnection);
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const collapseByDefault = useStore((s) => s.settings.collapseGroupsByDefault);
+  // Per-group deviations from the default fold state. Deliberately not
+  // persisted, so groups return to the default on the next launch.
+  const [foldOverride, setFoldOverride] = useState<Record<string, boolean>>({});
+  const [query, setQuery] = useState("");
+  const searchRef = useRef<HTMLInputElement>(null);
 
   const asideRef = useRef<HTMLElement>(null);
   const [width, setWidth] = useState<number>(() => {
@@ -92,8 +100,20 @@ export function Sidebar({
   }, [width]);
 
   const { names, map } = useMemo(() => {
+    const match = buildFilter(query);
     const map = new Map<string, Connection[]>();
     for (const c of connections) {
+      // Search the whole row, not just the name — hostnames and tags are how
+      // you actually remember a box you set up months ago.
+      if (
+        match &&
+        !match(
+          [c.name, c.host, c.username, c.group, c.serialPort, ...(c.tags ?? [])]
+            .filter(Boolean)
+            .join(" ")
+        )
+      )
+        continue;
       const g = c.group?.trim() || UNGROUPED;
       if (!map.has(g)) map.set(g, []);
       map.get(g)!.push(c);
@@ -109,14 +129,27 @@ export function Sidebar({
       a === UNGROUPED ? 1 : b === UNGROUPED ? -1 : a.localeCompare(b)
     );
     return { names, map };
-  }, [connections]);
+  }, [connections, query]);
+
+  // Flipping the preference drops the overrides so it takes effect at once.
+  useEffect(() => setFoldOverride({}), [collapseByDefault]);
 
   const toggle = (g: string) =>
-    setCollapsed((prev) => {
-      const next = new Set(prev);
-      next.has(g) ? next.delete(g) : next.add(g);
-      return next;
-    });
+    setFoldOverride((prev) => ({ ...prev, [g]: !(prev[g] ?? collapseByDefault) }));
+
+  // Ctrl+Shift+P focuses the filter. Deliberately not Ctrl+P: that belongs to
+  // readline in the terminal, and stealing it would break history navigation.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.shiftKey && (e.key === "P" || e.key === "p")) {
+        e.preventDefault();
+        searchRef.current?.focus();
+        searchRef.current?.select();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   // An elevated saved terminal can't embed, so it opens in its own UAC window;
   // everything else opens as a normal tab.
@@ -153,7 +186,40 @@ export function Sidebar({
         </div>
       </div>
 
+      <div className="no-drag px-3 pb-2">
+        <div className="relative">
+          <Search
+            size={13}
+            className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-dim"
+          />
+          <input
+            ref={searchRef}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => e.key === "Escape" && setQuery("")}
+            placeholder="Filter — name, host, tag, *"
+            title="Filter saved connections (Ctrl+Shift+P). Use * as a wildcard."
+            className="w-full rounded-md border border-edge bg-bg-inset py-1.5 pl-8 pr-7 font-mono text-[11.5px] text-ink-hi outline-none transition placeholder:text-ink-dim focus:border-accent/60"
+          />
+          {query && (
+            <button
+              onClick={() => setQuery("")}
+              title="Clear filter"
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-ink-dim transition hover:text-ink-hi"
+            >
+              <X size={12} />
+            </button>
+          )}
+        </div>
+      </div>
+
       <div className="flex-1 overflow-y-auto px-2 pb-4">
+        {query && names.length === 0 && connections.length > 0 && (
+          <div className="mx-1 mt-6 rounded-lg border border-dashed border-edge-bright px-4 py-5 text-center font-mono text-[11px] text-ink-dim">
+            nothing matches{" "}
+            <span className="text-ink-mid">{query}</span>
+          </div>
+        )}
         {connections.length === 0 && (
           <div className="mx-1 mt-8 rounded-lg border border-dashed border-edge-bright px-4 py-6 font-mono text-[11px] leading-relaxed text-ink-dim">
             <div className="text-ink-mid">$ no connections</div>
@@ -165,7 +231,9 @@ export function Sidebar({
         )}
 
         {names.map((g) => {
-          const isCollapsed = collapsed.has(g);
+          // A filter is an explicit request to see matches — honouring a fold
+          // state on top of it would just hide the thing being searched for.
+          const isCollapsed = query ? false : foldOverride[g] ?? collapseByDefault;
           const items = map.get(g)!;
           return (
             <div key={g} className="mt-3">
@@ -183,14 +251,24 @@ export function Sidebar({
               {!isCollapsed &&
                 items.map((c) => {
                   const Icon = ICONS[c.protocol];
-                  const color = PROTOCOL_COLORS[c.protocol];
+                  // A per-connection accent overrides the protocol colour, so a
+                  // host can be marked out (red for prod) without losing its
+                  // protocol icon.
+                  const color = c.color || PROTOCOL_COLORS[c.protocol];
                   return (
                     <div
                       key={c.id}
                       onDoubleClick={() => activate(c)}
                       title={`${c.name}\n${connectionDetail(c)}\n\nDouble-click to open`}
-                      className="group flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 transition hover:bg-bg-hover"
+                      className="group relative flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 transition hover:bg-bg-hover"
                     >
+                      {c.color && (
+                        <span
+                          aria-hidden
+                          className="absolute inset-y-1 left-0 w-0.5 rounded-full"
+                          style={{ backgroundColor: c.color }}
+                        />
+                      )}
                       <div
                         className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md"
                         style={{ backgroundColor: `${color}14` }}
@@ -198,7 +276,19 @@ export function Sidebar({
                         <Icon size={14} color={color} />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <div className="truncate text-[13px] text-ink-hi">{c.name}</div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="truncate text-[13px] text-ink-hi">
+                            {c.name}
+                          </span>
+                          {c.tags?.slice(0, 2).map((t) => (
+                            <span
+                              key={t}
+                              className="shrink-0 rounded bg-bg-elev px-1 py-px font-mono text-[9px] leading-tight text-ink-dim"
+                            >
+                              {t}
+                            </span>
+                          ))}
+                        </div>
                         <div className="truncate font-mono text-[10.5px] text-ink-dim">
                           {connectionDetail(c)}
                         </div>
@@ -257,7 +347,7 @@ export function Sidebar({
 
       <div className="flex items-center justify-between border-t border-edge px-3 py-2">
         <span className="font-mono text-[9.5px] tracking-wide text-ink-dim">
-          in-process · no ssh.exe
+          in-process · zero external binaries
         </span>
         <button onClick={onSettings} title="Settings" className="tb-btn">
           <SettingsIcon size={15} />

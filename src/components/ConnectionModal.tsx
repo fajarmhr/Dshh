@@ -2,8 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import { X, RefreshCw } from "lucide-react";
 import { useStore } from "../store";
 import { serialListPorts, localListShells } from "../lib/api";
-import { overlayDismiss } from "../lib/utils";
+import { clamp, overlayDismiss } from "../lib/utils";
+import { THEME_ORDER } from "../lib/themes";
 import {
+  CONNECTION_COLORS,
   DEFAULT_PORTS,
   PROTOCOL_COLORS,
   PROTOCOL_LABELS,
@@ -192,6 +194,53 @@ export function ConnectionModal({
                   <option key={g} value={g} />
                 ))}
               </datalist>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="field-label">Accent colour</label>
+              <div className="flex flex-wrap items-center gap-1.5 py-1">
+                <button
+                  onClick={() => set("color", undefined)}
+                  title="No accent — use the protocol colour"
+                  className={`h-5 w-5 rounded-md border transition ${
+                    form.color
+                      ? "border-edge hover:border-edge-bright"
+                      : "border-accent ring-1 ring-accent/40"
+                  }`}
+                />
+                {CONNECTION_COLORS.map((c) => (
+                  <button
+                    key={c}
+                    onClick={() => set("color", c)}
+                    title={c}
+                    style={{ backgroundColor: c }}
+                    className={`h-5 w-5 rounded-md transition ${
+                      form.color === c
+                        ? "ring-2 ring-white/70"
+                        : "opacity-70 hover:opacity-100"
+                    }`}
+                  />
+                ))}
+              </div>
+            </div>
+            <div>
+              <label className="field-label">Tags (comma separated)</label>
+              <input
+                className="field-input"
+                value={(form.tags ?? []).join(", ")}
+                placeholder="prod, eu-west, db"
+                onChange={(e) =>
+                  set(
+                    "tags",
+                    e.target.value
+                      .split(",")
+                      .map((t) => t.trim())
+                      .filter(Boolean)
+                  )
+                }
+              />
             </div>
           </div>
 
@@ -486,6 +535,60 @@ export function ConnectionModal({
                 Run as Administrator (opens in a separate elevated window)
               </label>
             </>
+          )}
+
+          {form.protocol !== "sftp" && form.protocol !== "ftp" && (
+            <div className="space-y-3 border-t border-edge pt-4">
+              <div>
+                <label className="field-label">Run on connect (optional)</label>
+                <input
+                  className="field-input font-mono text-[13px]"
+                  value={form.runOnConnect ?? ""}
+                  placeholder="e.g. cd /var/log && tail -f app.log"
+                  onChange={(e) => set("runOnConnect", e.target.value)}
+                />
+                <p className="mt-1 text-[11px] leading-relaxed text-ink-dim">
+                  Typed into the session once the shell is ready.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="field-label">Colour scheme</label>
+                  <select
+                    className="field-input font-mono text-[13px]"
+                    value={form.themeId ?? ""}
+                    onChange={(e) => set("themeId", e.target.value || undefined)}
+                  >
+                    <option value="">Use global setting</option>
+                    {THEME_ORDER.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="field-label">Font size</label>
+                  <input
+                    type="number"
+                    min={8}
+                    max={28}
+                    className="field-input font-mono text-[13px]"
+                    value={form.fontSize ?? ""}
+                    placeholder="global"
+                    onChange={(e) =>
+                      set(
+                        "fontSize",
+                        e.target.value
+                          ? clamp(Number(e.target.value), 8, 28, 13)
+                          : undefined
+                      )
+                    }
+                  />
+                </div>
+              </div>
+            </div>
           )}
         </div>
 

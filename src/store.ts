@@ -9,9 +9,12 @@ import {
   secretsDecrypt,
   secretsEncrypt,
 } from "./lib/api";
+import { DEFAULT_THEME_ID } from "./lib/themes";
 import type {
   Connection,
+  CursorStyle,
   HighlightRule,
+  Macro,
   Protocol,
   QuickCommand,
   Session,
@@ -21,12 +24,34 @@ import type {
 const STORAGE_KEY = "dshh.connections.v1";
 const SETTINGS_KEY = "dshh.settings.v1";
 const QUICKCMD_KEY = "dshh.quickcmds.v1";
+const MACRO_KEY = "dshh.macros.v1";
+
+/**
+ * Backdrop behind the app chrome. Mica and acrylic are Windows 11 only and
+ * degrade to a plain opaque window elsewhere.
+ */
+export type WindowEffect = "opaque" | "mica" | "acrylic";
 
 export interface Settings {
   autoLog: boolean;
   logDir: string;
   /** Optional folder where saved connections are mirrored as connections.json. */
   sessionsDir: string;
+  /** Sidebar groups start folded; expanding one lasts until the app restarts. */
+  collapseGroupsByDefault: boolean;
+  /** Persistent bar under the terminal showing host, latency and encoding. */
+  statusBar: boolean;
+  /** Windows 11 backdrop behind the app chrome. */
+  windowEffect: WindowEffect;
+  // ---- Terminal appearance (MobaXterm's Terminal settings tab) ----
+  /** Built-in palette id; see lib/themes.ts. */
+  themeId: string;
+  fontFamily: string;
+  fontSize: number;
+  lineHeight: number;
+  cursorStyle: CursorStyle;
+  cursorBlink: boolean;
+  scrollback: number;
   highlightEnabled: boolean;
   highlightRules: HighlightRule[];
   /** Highest default-rule set merged into highlightRules (see loadSettings). */
@@ -68,6 +93,16 @@ const DEFAULT_SETTINGS: Settings = {
   autoLog: false,
   logDir: "",
   sessionsDir: "",
+  collapseGroupsByDefault: true,
+  statusBar: true,
+  windowEffect: "opaque",
+  themeId: DEFAULT_THEME_ID,
+  fontFamily: '"JetBrains Mono Variable", "Cascadia Code", Consolas, monospace',
+  fontSize: 13,
+  lineHeight: 1.2,
+  cursorStyle: "block",
+  cursorBlink: true,
+  scrollback: 10000,
   highlightEnabled: true,
   highlightRules: DEFAULT_HIGHLIGHT_RULES,
   rulesVersion: RULES_VERSION,
@@ -175,6 +210,8 @@ function persistAll(connections: Connection[]) {
 }
 const persistQuickCommands = (q: QuickCommand[]) =>
   localStorage.setItem(QUICKCMD_KEY, JSON.stringify(q));
+const persistMacros = (m: Macro[]) =>
+  localStorage.setItem(MACRO_KEY, JSON.stringify(m));
 
 interface AppState {
   connections: Connection[];
@@ -191,6 +228,11 @@ interface AppState {
   splitSessionId: string | null;
   settings: Settings;
   quickCommands: QuickCommand[];
+  macros: Macro[];
+  /** Session currently capturing typed commands into a macro, if any. */
+  recordingMacroFor: string | null;
+  /** Commands captured so far in the in-progress recording. */
+  recordingSteps: string[];
   /** Running port forwards: tunnel definition id -> backend tunnel id. */
   activeTunnels: Record<string, string>;
   /** Multi-execution: typed input mirrors to every connected terminal. */
@@ -216,6 +258,14 @@ interface AppState {
   updateQuickCommand: (id: string, patch: Partial<Omit<QuickCommand, "id">>) => void;
   removeQuickCommand: (id: string) => void;
 
+  /** Begin capturing commands typed in `sessionId` into a new macro. */
+  startRecording: (sessionId: string) => void;
+  /** Append one captured command line to the in-progress recording. */
+  recordStep: (command: string) => void;
+  /** Finish recording; saves under `label` when at least one step was captured. */
+  stopRecording: (label: string) => void;
+  removeMacro: (id: string) => void;
+
   setTunnelActive: (defId: string, backendId: string | null) => void;
 }
 
@@ -228,6 +278,9 @@ export const useStore = create<AppState>((set, get) => ({
   splitSessionId: null,
   settings: loadSettings(),
   quickCommands: loadJson<QuickCommand[]>(QUICKCMD_KEY) ?? [],
+  macros: loadJson<Macro[]>(MACRO_KEY) ?? [],
+  recordingMacroFor: null,
+  recordingSteps: [],
   activeTunnels: {},
   broadcastInput: false,
 
@@ -383,6 +436,35 @@ export const useStore = create<AppState>((set, get) => ({
     const quickCommands = get().quickCommands.filter((q) => q.id !== id);
     persistQuickCommands(quickCommands);
     set({ quickCommands });
+  },
+
+  startRecording: (sessionId) =>
+    set({ recordingMacroFor: sessionId, recordingSteps: [] }),
+
+  recordStep: (command) => {
+    const line = command.trim();
+    // Blank lines are how people scroll a prompt; they aren't macro steps.
+    if (!get().recordingMacroFor || !line) return;
+    set({ recordingSteps: [...get().recordingSteps, line] });
+  },
+
+  stopRecording: (label) => {
+    const steps = get().recordingSteps;
+    if (steps.length) {
+      const macros = [
+        ...get().macros,
+        { id: nanoid(), label: label.trim() || steps[0], steps },
+      ];
+      persistMacros(macros);
+      set({ macros });
+    }
+    set({ recordingMacroFor: null, recordingSteps: [] });
+  },
+
+  removeMacro: (id) => {
+    const macros = get().macros.filter((m) => m.id !== id);
+    persistMacros(macros);
+    set({ macros });
   },
 
   setTunnelActive: (defId, backendId) => {

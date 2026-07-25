@@ -13,13 +13,15 @@ import {
 import {
   appVersion,
   openUrl,
+  portableDataDir,
   updateApply,
   updateCheck,
   updateRestart,
   type UpdateInfo,
 } from "../lib/api";
-import type { HighlightColor, HighlightRule } from "../lib/types";
-import { overlayDismiss } from "../lib/utils";
+import { THEME_ORDER } from "../lib/themes";
+import type { CursorStyle, HighlightColor, HighlightRule } from "../lib/types";
+import { clamp, overlayDismiss } from "../lib/utils";
 
 const HL_COLORS: Record<HighlightColor, string> = {
   red: "#f26d78",
@@ -38,6 +40,8 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
   const [sessionsNote, setSessionsNote] = useState("");
 
   const [version, setVersion] = useState("");
+  /** Portable data folder, or "" when settings live in the user profile. */
+  const [dataDir, setDataDir] = useState("");
   const [updState, setUpdState] = useState<
     "idle" | "checking" | "none" | "found" | "downloading" | "ready" | "error"
   >("idle");
@@ -46,6 +50,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
 
   useEffect(() => {
     appVersion().then(setVersion).catch(() => {});
+    portableDataDir().then(setDataDir).catch(() => {});
   }, []);
 
   const masterLocked = useStore((s) => s.masterLocked);
@@ -378,6 +383,173 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             {sessionsNote && (
               <p className="mt-1.5 font-mono text-[11px] text-accent">{sessionsNote}</p>
             )}
+          </div>
+
+          <div>
+            <div className="micro-label mb-2">Interface</div>
+
+            <label className="flex cursor-pointer items-start gap-2.5 rounded-md px-1 py-2">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={settings.collapseGroupsByDefault}
+                onChange={(e) =>
+                  setSettings({ collapseGroupsByDefault: e.target.checked })
+                }
+              />
+              <span className="text-sm text-ink-hi">
+                Start with connection groups collapsed
+                <span className="mt-0.5 block text-[11px] leading-relaxed text-ink-dim">
+                  Keeps the sidebar to a short list of group headers on launch.
+                  Expanding a group lasts until the app is restarted.
+                </span>
+              </span>
+            </label>
+
+            <p className="mt-2 px-1 text-[11px] leading-relaxed text-ink-dim">
+              {dataDir ? (
+                <>
+                  Running portably — settings, connections and logs live in{" "}
+                  <span className="break-all font-mono text-ink-mid">{dataDir}</span>.
+                  Move that folder and everything comes with it.
+                </>
+              ) : (
+                <>
+                  Settings are stored in your Windows user profile. To keep them
+                  beside the executable instead, run Dshh from a folder it can
+                  write to.
+                </>
+              )}
+            </p>
+          </div>
+
+          <div>
+            <div className="micro-label mb-2">Terminal appearance</div>
+
+            <label className="field-label">Colour scheme</label>
+            <div className="grid grid-cols-3 gap-1.5">
+              {THEME_ORDER.map((t) => {
+                const active = settings.themeId === t.id;
+                return (
+                  <button
+                    key={t.id}
+                    onClick={() => setSettings({ themeId: t.id })}
+                    title={t.label}
+                    className={`rounded-md border px-2 py-1.5 text-left transition ${
+                      active
+                        ? "border-accent/70 bg-accent/10"
+                        : "border-edge hover:border-edge-bright hover:bg-bg-hover"
+                    }`}
+                  >
+                    <span className="flex gap-0.5">
+                      {t.preview.map((c, i) => (
+                        <span
+                          key={i}
+                          className="h-3 flex-1 rounded-sm"
+                          style={{ backgroundColor: c }}
+                        />
+                      ))}
+                    </span>
+                    <span
+                      className={`mt-1 block truncate text-[10.5px] ${
+                        active ? "text-ink-hi" : "text-ink-dim"
+                      }`}
+                    >
+                      {t.label}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <div>
+                <label className="field-label">Font</label>
+                <input
+                  className="field-input w-full font-mono text-[12px]"
+                  value={settings.fontFamily}
+                  onChange={(e) => setSettings({ fontFamily: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="field-label">Cursor</label>
+                <select
+                  value={settings.cursorStyle}
+                  onChange={(e) =>
+                    setSettings({ cursorStyle: e.target.value as CursorStyle })
+                  }
+                  className="w-full rounded-md border border-edge bg-bg-inset px-2 py-1.5 font-mono text-[12px] text-ink-hi outline-none transition focus:border-accent/60"
+                >
+                  <option value="block">block</option>
+                  <option value="bar">bar</option>
+                  <option value="underline">underline</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="mt-2 grid grid-cols-3 gap-2">
+              <div>
+                <label className="field-label">Size</label>
+                <input
+                  type="number"
+                  min={8}
+                  max={28}
+                  className="field-input w-full font-mono text-[12px]"
+                  value={settings.fontSize}
+                  onChange={(e) =>
+                    setSettings({
+                      fontSize: clamp(Number(e.target.value), 8, 28, 13),
+                    })
+                  }
+                />
+              </div>
+              <div>
+                <label className="field-label">Line height</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={2}
+                  step={0.05}
+                  className="field-input w-full font-mono text-[12px]"
+                  value={settings.lineHeight}
+                  onChange={(e) =>
+                    setSettings({
+                      lineHeight: clamp(Number(e.target.value), 1, 2, 1.2),
+                    })
+                  }
+                />
+              </div>
+              <div>
+                <label className="field-label">Scrollback</label>
+                <input
+                  type="number"
+                  min={200}
+                  max={200000}
+                  step={1000}
+                  className="field-input w-full font-mono text-[12px]"
+                  value={settings.scrollback}
+                  onChange={(e) =>
+                    setSettings({
+                      scrollback: clamp(Number(e.target.value), 200, 200000, 10000),
+                    })
+                  }
+                />
+              </div>
+            </div>
+
+            <label className="mt-1 flex cursor-pointer items-center gap-2.5 rounded-md px-1 py-2">
+              <input
+                type="checkbox"
+                checked={settings.cursorBlink}
+                onChange={(e) => setSettings({ cursorBlink: e.target.checked })}
+              />
+              <span className="text-sm text-ink-hi">Blink the cursor</span>
+            </label>
+
+            <p className="text-[11px] leading-relaxed text-ink-dim">
+              Applies to every open terminal immediately. A connection can
+              override the scheme and size for itself in its edit dialog.
+            </p>
           </div>
 
           <div>

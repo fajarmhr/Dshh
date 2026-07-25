@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
-    "tauri:build": "tauri build"
+    "tauri:build": "tauri build",
+    "package:portable": "powershell -ExecutionPolicy Bypass -File ./scripts/package-portable.ps1"
   },
   "dependencies": {
     "@fontsource-variable/geist": "^5.2.9",

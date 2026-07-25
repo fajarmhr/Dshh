@@ -17,6 +17,7 @@ export function TabBar() {
   const setActive = useStore((s) => s.setActiveSession);
   const toggleSplit = useStore((s) => s.toggleSplitSession);
   const close = useStore((s) => s.closeSession);
+  const connections = useStore((s) => s.connections);
 
   if (sessions.length === 0)
     return <div className="h-9 shrink-0 border-b border-edge bg-bg-panel" />;
@@ -26,6 +27,11 @@ export function TabBar() {
       {sessions.map((s) => {
         const isActive = s.id === activeId;
         const isSplit = s.id === splitId;
+        // The connection's accent, when it has one, replaces the generic blue
+        // underline — so a tab on a host you marked "prod" reads as prod even
+        // when the sidebar is scrolled away.
+        const accent =
+          connections.find((c) => c.id === s.connectionId)?.color ?? null;
         return (
           <div
             key={s.id}
@@ -38,7 +44,16 @@ export function TabBar() {
             )}
           >
             {isActive && (
-              <div className="absolute inset-x-0 top-0 h-[2px] bg-accent" />
+              <div
+                className={cn("absolute inset-x-0 top-0 h-[2px]", !accent && "bg-accent")}
+                style={accent ? { backgroundColor: accent } : undefined}
+              />
+            )}
+            {!isActive && accent && (
+              <div
+                className="absolute inset-x-0 top-0 h-[2px] opacity-40"
+                style={{ backgroundColor: accent }}
+              />
             )}
             <span
               className={cn(

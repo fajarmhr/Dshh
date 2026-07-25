@@ -24,6 +24,16 @@ export function timestamp(): string {
   );
 }
 
+/**
+ * Keep a numeric field inside sane bounds. A cleared number input reads as
+ * `NaN`, which would otherwise be persisted and break the terminal on reload,
+ * so that case falls back to `fallback` rather than to a bound.
+ */
+export function clamp(n: number, min: number, max: number, fallback: number): number {
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(max, Math.max(min, n));
+}
+
 /** Make a connection name safe to embed in a filename. */
 export function sanitizeFilename(s: string): string {
   return s.replace(/[^a-zA-Z0-9._-]+/g, "_").slice(0, 60) || "session";
@@ -41,6 +51,31 @@ export function overlayDismiss(onClose: () => void) {
       if (e.target === e.currentTarget) onClose();
     },
   };
+}
+
+/**
+ * Build a predicate for MobaXterm-style "quick connect" filtering: a plain
+ * case-insensitive substring match, upgraded to a wildcard match as soon as
+ * the query contains `*` (so `prod-*-01` and `10.0.*` both work).
+ *
+ * Returns `null` for an empty query, letting callers skip filtering entirely
+ * rather than run every row through a match that always succeeds.
+ */
+export function buildFilter(query: string): ((haystack: string) => boolean) | null {
+  const q = query.trim().toLowerCase();
+  if (!q) return null;
+  if (!q.includes("*")) return (h) => h.toLowerCase().includes(q);
+  const pattern = q
+    .split("*")
+    .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    .join(".*");
+  let re: RegExp;
+  try {
+    re = new RegExp(pattern);
+  } catch {
+    return (h) => h.toLowerCase().includes(q);
+  }
+  return (h) => re.test(h.toLowerCase());
 }
 
 /** Short local date-time for file listings, e.g. "2026-07-03 14:22". */

@@ -4,9 +4,9 @@ import type { Connection, Listing, LocalShell, RemoteFile } from "./types";
 /**
  * All backend calls funnel through here. Terminal-style byte streams
  * (SSH shell, serial) use Tauri Channels so bytes flow straight from
- * Rust into the frontend without polling. No child process named
- * ssh/sftp/ftp is ever spawned: every protocol runs inside this app's
- * own executable via Rust crates.
+ * Rust into the frontend without polling. Nothing is shelled out to an
+ * external client: every protocol runs inside this app's own executable
+ * via Rust crates.
  */
 
 export type ByteHandler = (bytes: Uint8Array) => void;
@@ -168,6 +168,11 @@ export interface UpdateInfo {
   releaseUrl: string;
 }
 export const appVersion = () => invoke<string>("app_version");
+/**
+ * The portable `data/` folder beside the exe, or "" when the app is running
+ * non-portably (settings then live in the per-user WebView2 profile).
+ */
+export const portableDataDir = () => invoke<string>("portable_data_dir");
 export const updateCheck = () => invoke<UpdateInfo>("update_check");
 export const updateApply = (assetUrl: string) => invoke("update_apply", { assetUrl });
 export const updateRestart = () => invoke("update_restart");
