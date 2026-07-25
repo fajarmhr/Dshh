@@ -23,6 +23,9 @@ Thumbs.db
 # Local Claude Code settings
 .claude/settings.local.json
 
+# Personal release notes (DEPLOY.md is the committed reference)
+/RELEASE-GUIDE.md
+
 # Local env files
 .env
 .env.*
