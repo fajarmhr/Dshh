@@ -25,6 +25,8 @@ export function LocalPane({
   const [msg, setMsg] = useState("");
   const [dragOver, setDragOver] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  // Editable address bar; mirrors the remote pane in FileBrowser.
+  const [pathDraft, setPathDraft] = useState(cwd);
 
   const list = useCallback(async (path: string) => {
     setBusy(true);
@@ -61,6 +63,15 @@ export function LocalPane({
     } else {
       list(cwd.replace(/\/+$/, "").split("/").slice(0, -1).join("/") || "/");
     }
+  };
+
+  useEffect(() => setPathDraft(cwd), [cwd]);
+
+  // Enter navigates; an empty path lists the drives ("This PC").
+  const goPath = () => {
+    const next = pathDraft.trim();
+    if (next === cwd) return;
+    list(next);
   };
 
   const onDrop = async (e: React.DragEvent) => {
@@ -112,9 +123,27 @@ export function LocalPane({
         <button onClick={() => list(cwd)} className="tb-btn" title="Refresh">
           <RefreshCw size={15} className={busy ? "animate-spin" : ""} />
         </button>
-        <div className="mx-2 flex h-6 min-w-0 flex-1 items-center gap-1.5 rounded-md border border-edge bg-bg-inset px-2 text-ink-mid">
+        <div className="mx-2 flex h-6 min-w-0 flex-1 items-center gap-1.5 rounded-md border border-edge bg-bg-inset px-2 text-ink-mid focus-within:border-accent">
           <Monitor size={11} className="shrink-0 text-ink-dim" />
-          <span className="truncate font-mono text-[11px]">{cwd || "This PC"}</span>
+          <input
+            value={pathDraft}
+            onChange={(e) => setPathDraft(e.target.value)}
+            onFocus={(e) => e.currentTarget.select()}
+            onBlur={() => setPathDraft(cwd)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") goPath();
+              else if (e.key === "Escape") {
+                setPathDraft(cwd);
+                e.currentTarget.blur();
+              }
+            }}
+            placeholder="This PC"
+            spellCheck={false}
+            autoComplete="off"
+            aria-label="Local directory path"
+            title="Type a path and press Enter"
+            className="min-w-0 flex-1 bg-transparent font-mono text-[11px] outline-none placeholder:text-ink-dim"
+          />
         </div>
       </div>
 

@@ -46,6 +46,9 @@ export function FileBrowser({
   const [msg, setMsg] = useState<string>("");
   const [dragOver, setDragOver] = useState(false);
   const [showLocal, setShowLocal] = useState(false);
+  // Editable address bar. Kept as a draft so a half-typed path never becomes
+  // the real cwd; navigating elsewhere (click, Up, refresh) resyncs it.
+  const [pathDraft, setPathDraft] = useState(cwd);
   const rootRef = useRef<HTMLDivElement>(null);
   const remoteRef = useRef<HTMLDivElement>(null);
   // Latest values for the long-lived drag-drop subscription.
@@ -112,6 +115,16 @@ export function FileBrowser({
     if (!backendId) return;
     const parent = cwd.replace(/\/+$/, "").split("/").slice(0, -1).join("/") || "/";
     list(backendId, parent);
+  };
+
+  useEffect(() => setPathDraft(cwd), [cwd]);
+
+  // Enter navigates. A bad path leaves cwd untouched and reports through the
+  // status bar, so the typed text stays put and can be corrected.
+  const goPath = () => {
+    const next = pathDraft.trim();
+    if (!backendId || !next || next === cwd) return;
+    list(backendId, next);
   };
 
   const download = async (f: RemoteFile) => {
@@ -290,9 +303,26 @@ export function FileBrowser({
         <button onClick={upload} className="tb-btn" title="Upload file">
           <Upload size={15} />
         </button>
-        <div className="mx-2 flex h-6 min-w-0 flex-1 items-center gap-1.5 rounded-md border border-edge bg-bg-inset px-2 text-ink-mid">
+        <div className="mx-2 flex h-6 min-w-0 flex-1 items-center gap-1.5 rounded-md border border-edge bg-bg-inset px-2 text-ink-mid focus-within:border-accent">
           <HardDrive size={11} className="shrink-0 text-ink-dim" />
-          <span className="truncate font-mono text-[11px]">{cwd}</span>
+          <input
+            value={pathDraft}
+            onChange={(e) => setPathDraft(e.target.value)}
+            onFocus={(e) => e.currentTarget.select()}
+            onBlur={() => setPathDraft(cwd)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") goPath();
+              else if (e.key === "Escape") {
+                setPathDraft(cwd);
+                e.currentTarget.blur();
+              }
+            }}
+            spellCheck={false}
+            autoComplete="off"
+            aria-label="Directory path"
+            title="Type a path and press Enter"
+            className="min-w-0 flex-1 bg-transparent font-mono text-[11px] outline-none placeholder:text-ink-dim"
+          />
         </div>
       </div>
 
