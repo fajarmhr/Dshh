@@ -1,4 +1,4 @@
-use crate::{next_id, AppState, Connection, RemoteFile};
+use crate::{next_id, AppState, Connection, Listing, RemoteFile};
 use std::io::Cursor;
 use std::sync::{Arc, Mutex};
 use std::time::UNIX_EPOCH;
@@ -54,7 +54,7 @@ pub async fn ftp_list(
     id: String,
     path: String,
     state: State<'_, AppState>,
-) -> Result<Vec<RemoteFile>, String> {
+) -> Result<Listing, String> {
     let arc = get_stream(&state, &id).await?;
     let dir = if path.is_empty() { "/".to_string() } else { path };
     let dir2 = dir.clone();
@@ -94,7 +94,10 @@ pub async fn ftp_list(
             });
         }
     }
-    Ok(out)
+    Ok(Listing {
+        path: dir,
+        files: out,
+    })
 }
 
 #[tauri::command]

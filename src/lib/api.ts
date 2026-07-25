@@ -1,5 +1,5 @@
 import { invoke, Channel } from "@tauri-apps/api/core";
-import type { Connection, LocalShell, RemoteFile } from "./types";
+import type { Connection, Listing, LocalShell, RemoteFile } from "./types";
 
 /**
  * All backend calls funnel through here. Terminal-style byte streams
@@ -116,7 +116,7 @@ export const scpDownload = (conn: Connection, remote: string, local: string) =>
 // ---- SFTP ----
 export const sftpConnect = (conn: Connection) => invoke<string>("sftp_connect", { conn });
 export const sftpList = (id: string, path: string) =>
-  invoke<RemoteFile[]>("sftp_list", { id, path });
+  invoke<Listing>("sftp_list", { id, path });
 export const sftpDownload = (id: string, remote: string, local: string) =>
   invoke("sftp_download", { id, remote, local });
 export const sftpUpload = (id: string, local: string, remote: string) =>
@@ -126,7 +126,7 @@ export const sftpDisconnect = (id: string) => invoke("sftp_disconnect", { id });
 // ---- FTP ----
 export const ftpConnect = (conn: Connection) => invoke<string>("ftp_connect", { conn });
 export const ftpList = (id: string, path: string) =>
-  invoke<RemoteFile[]>("ftp_list", { id, path });
+  invoke<Listing>("ftp_list", { id, path });
 export const ftpDownload = (id: string, remote: string, local: string) =>
   invoke("ftp_download", { id, remote, local });
 export const ftpUpload = (id: string, local: string, remote: string) =>

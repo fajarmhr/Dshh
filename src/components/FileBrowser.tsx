@@ -59,12 +59,13 @@ export function FileBrowser({
     async (id: string, path: string) => {
       setBusy(true);
       try {
-        const entries = isSftp ? await sftpList(id, path) : await ftpList(id, path);
-        entries.sort((a, b) =>
+        const res = isSftp ? await sftpList(id, path) : await ftpList(id, path);
+        res.files.sort((a, b) =>
           a.isDir === b.isDir ? a.name.localeCompare(b.name) : a.isDir ? -1 : 1
         );
-        setFiles(entries);
-        setCwd(path);
+        setFiles(res.files);
+        // Server-resolved path, so the address bar shows where "." landed.
+        setCwd(res.path);
       } catch (e) {
         setMsg(String(e));
       } finally {

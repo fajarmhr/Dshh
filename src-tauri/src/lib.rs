@@ -55,6 +55,15 @@ pub struct RemoteFile {
     pub modified: Option<i64>,
 }
 
+/// A directory listing plus the path the server actually resolved it to, so
+/// the address bar can show where a relative request like "." landed.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Listing {
+    pub path: String,
+    pub files: Vec<RemoteFile>,
+}
+
 /// Shared handle to an optional session log for a streaming session.
 /// `None` means logging is off; `Some(sink)` means output is being recorded
 /// (filtered to readable plain text by [`logs::LogSink`]).

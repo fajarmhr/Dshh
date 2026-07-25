@@ -72,6 +72,12 @@ export interface RemoteFile {
   modified: number | null; // epoch seconds
 }
 
+/** A listing plus the path the server resolved it to ("." → "/home/you"). */
+export interface Listing {
+  path: string;
+  files: RemoteFile[];
+}
+
 /** One-click command snippet sent to the active terminal (XShell "quick command"). */
 export interface QuickCommand {
   id: string;

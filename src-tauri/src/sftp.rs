@@ -1,5 +1,5 @@
 use crate::ssh::{connect_and_auth, SshHandle};
-use crate::{next_id, AppState, Connection, RemoteFile};
+use crate::{next_id, AppState, Connection, Listing, RemoteFile};
 use russh_sftp::client::SftpSession;
 use std::sync::Arc;
 use tauri::State;
@@ -55,8 +55,10 @@ pub async fn sftp_list(
     id: String,
     path: String,
     state: State<'_, AppState>,
-) -> Result<Vec<RemoteFile>, String> {
+) -> Result<Listing, String> {
     let sftp = sftp_of(&state, &id).await?;
+    // Resolve "." (and any relative path) to an absolute one; the frontend
+    // shows this in the address bar rather than what it asked for.
     let base = sftp
         .canonicalize(if path.is_empty() { ".".into() } else { path })
         .await
@@ -83,7 +85,10 @@ pub async fn sftp_list(
             modified: meta.mtime.map(|m| m as i64),
         });
     }
-    Ok(out)
+    Ok(Listing {
+        path: base,
+        files: out,
+    })
 }
 
 #[tauri::command]
