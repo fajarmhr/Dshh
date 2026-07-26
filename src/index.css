@@ -56,6 +56,30 @@ input[type="checkbox"] {
   background-color: transparent !important;
 }
 
+/*
+ * Mica / acrylic. `data-effect` is set on <html> only after the backend
+ * confirms the material is in place (see applyWindowEffect), so these rules
+ * never fire on a window that stayed opaque.
+ *
+ * Only the chrome goes translucent. The terminal keeps an opaque inset — a
+ * backdrop showing through log output is unreadable, which is the mistake that
+ * makes translucent terminals a gimmick rather than a feature.
+ */
+html[data-effect="mica"] body,
+html[data-effect="acrylic"] body {
+  background: transparent;
+}
+
+html[data-effect="mica"] .effect-surface,
+html[data-effect="acrylic"] .effect-surface {
+  background-color: rgb(13 18 26 / 0.55);
+}
+
+html[data-effect="mica"] .effect-base,
+html[data-effect="acrylic"] .effect-base {
+  background-color: rgb(10 14 20 / 0.35);
+}
+
 @layer utilities {
   .drag-region {
     -webkit-app-region: drag;

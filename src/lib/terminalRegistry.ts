@@ -24,6 +24,24 @@ export function getTerminal(sessionId: string): TerminalHandle | undefined {
   return handles.get(sessionId);
 }
 
+/**
+ * Replay a recorded macro into one session. Steps are paced rather than dumped
+ * in one go: a shell still busy with the previous command would otherwise
+ * swallow the next line. Stops early if the session goes away mid-replay.
+ */
+export async function sendMacro(
+  sessionId: string,
+  steps: string[],
+  stepDelayMs = 250
+): Promise<void> {
+  for (const step of steps) {
+    const handle = handles.get(sessionId);
+    if (!handle) return;
+    handle.send(step + "\r");
+    await new Promise((resolve) => setTimeout(resolve, stepDelayMs));
+  }
+}
+
 /** Send to every listed session that has a live handle; returns how many received it. */
 export function broadcastToTerminals(sessionIds: string[], data: string): number {
   let n = 0;

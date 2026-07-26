@@ -1,7 +1,29 @@
-import { X, Columns2 } from "lucide-react";
+import {
+  Cable,
+  Columns2,
+  FolderTree,
+  HardDrive,
+  Server,
+  SquareTerminal,
+  Terminal,
+  X,
+} from "lucide-react";
 import { useStore } from "../store";
-import { PROTOCOL_COLORS, PROTOCOL_LABELS } from "../lib/types";
+import { PROTOCOL_COLORS, PROTOCOL_LABELS, type Protocol } from "../lib/types";
 import { cn } from "../lib/utils";
+
+/**
+ * One icon per protocol, so a row of tabs is scannable without reading the
+ * labels — the thing MobaXterm gets right and a text-only tab strip doesn't.
+ */
+const PROTOCOL_ICONS: Record<Protocol, typeof Terminal> = {
+  ssh: Terminal,
+  sftp: FolderTree,
+  ftp: HardDrive,
+  serial: Cable,
+  local: SquareTerminal,
+  telnet: Server,
+};
 
 const STATUS_COLOR: Record<string, string> = {
   connecting: "#e8a54c",
@@ -20,10 +42,10 @@ export function TabBar() {
   const connections = useStore((s) => s.connections);
 
   if (sessions.length === 0)
-    return <div className="h-9 shrink-0 border-b border-edge bg-bg-panel" />;
+    return <div className="h-9 shrink-0 border-b border-edge bg-bg-panel effect-surface" />;
 
   return (
-    <div className="flex h-9 shrink-0 items-stretch overflow-x-auto border-b border-edge bg-bg-panel">
+    <div className="flex h-9 shrink-0 items-stretch overflow-x-auto border-b border-edge bg-bg-panel effect-surface">
       {sessions.map((s) => {
         const isActive = s.id === activeId;
         const isSplit = s.id === splitId;
@@ -62,12 +84,17 @@ export function TabBar() {
               )}
               style={{ backgroundColor: STATUS_COLOR[s.status] }}
             />
-            <span
-              className="shrink-0 font-mono text-[9px] font-semibold tracking-wider"
-              style={{ color: PROTOCOL_COLORS[s.protocol] }}
-            >
-              {PROTOCOL_LABELS[s.protocol]}
-            </span>
+            {(() => {
+              const Icon = PROTOCOL_ICONS[s.protocol];
+              return (
+                <Icon
+                  size={12}
+                  className="shrink-0"
+                  style={{ color: PROTOCOL_COLORS[s.protocol] }}
+                  aria-label={PROTOCOL_LABELS[s.protocol]}
+                />
+              );
+            })()}
             <span className="min-w-0 flex-1 truncate">{s.title}</span>
             <button
               onClick={(e) => {

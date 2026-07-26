@@ -20,7 +20,7 @@ export function Workspace() {
       : null;
 
   return (
-    <main className="flex min-w-0 flex-1 flex-col bg-bg-base">
+    <main className="flex min-w-0 flex-1 flex-col bg-bg-base effect-base">
       <TabBar />
       <div className="relative min-h-0 flex-1">
         {sessions.length === 0 && (

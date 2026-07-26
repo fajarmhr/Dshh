@@ -30,17 +30,30 @@ browser.
   configure it per connection, password or key auth for the hop.
 - **Multi-execution** — the Broadcast toggle mirrors typed input to every
   connected terminal at once (MobaXterm-style multi-exec).
+- **Macros** — hit **Macro** on a terminal to record the commands you type, name
+  the result, and replay it into any session from a chip in the bottom dock.
+  Steps are paced so the shell keeps up.
+- **SSH agent auth** — pick **agent** as the auth method and the key never
+  enters this process. Tries the Windows OpenSSH agent service first, then
+  Pageant; RSA keys negotiate SHA-2 via `server-sig-algs`.
 - **Local terminal** — launch **cmd**, **Windows PowerShell**, and (if installed)
   **PowerShell 7 / Git Bash / WSL** in an embedded tab. Open a one-off from the sidebar
   `▾` menu, or save a reusable **Local** profile. **Run as Administrator** elevates through
   UAC and opens in its own window (an elevated shell can't share this app's console).
 - **Real terminal** — xterm.js with buffer search (`Ctrl+F`), keyword highlighting,
   session recording, and save-to-file. Terminal size stays in lock-step with the remote
-  PTY, so cursor editing (`←/→`, history) never smears.
+  PTY, so cursor editing (`←/→`, history) never smears. An optional **status bar**
+  carries the target, time connected, grid size and encoding.
+- **Windows 11 backdrop (optional)** — Mica or acrylic behind the app chrome,
+  in Settings → Interface. The terminal stays opaque; output over a blurred
+  desktop is unreadable.
 - **SFTP file browser** with drag & drop upload from Explorer and remote file
   editing — double-click a file to open it in your local editor; every save
-  uploads back automatically. Plus **port forwarding** (`ssh -L` tunnels) and
-  saved-session sync.
+  uploads back automatically. Plus saved-session sync.
+- **Port forwarding, all three directions** — local (`ssh -L`), remote
+  (`ssh -R`, the server listens for you) and dynamic (`ssh -D`, a built-in
+  SOCKS5 proxy). Each forward runs on its own SSH connection and shows live
+  byte counters, so an idle tunnel reads differently from a busy one.
 - **SCP transfer** — copy single files to/from a server over SSH (the **SCP** button on an
   SSH tab), for hosts where the SFTP subsystem is disabled but `scp` still works.
   Remote paths may be absolute, `~/`-relative, or plain relative (resolved against home).
@@ -49,6 +62,13 @@ browser.
 - **Master password (optional)** — encrypts saved passwords/passphrases at rest
   (Argon2id + AES-256-GCM) in both app storage and the `connections.json` mirror;
   unlock once per app start. Enable it in Settings → Security.
+- **Sessions folder** — Settings → Security → *Sessions folder* mirrors your
+  connections to `connections.json`. Point it at a folder that already has one
+  and it is loaded instead, which is also how you carry connections into a new
+  install or recover them from an older one. It **replaces** the current list
+  rather than merging, accepts either a bare JSON array or the
+  `{ connections, master }` wrapper, and if the file came from an install with a
+  different master password, Dshh adopts that key and asks for *that* password.
 
 ## Prerequisites
 

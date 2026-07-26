@@ -8,16 +8,44 @@ export type AuthMethod = "password" | "key" | "agent";
  */
 export type TunnelKind = "local" | "remote" | "dynamic";
 
-/** A saved port forward attached to a connection. */
+/**
+ * A saved port forward attached to a connection. The three kinds read the same
+ * three fields differently — see each field, and `TUNNEL_FIELD_LABELS` for how
+ * they are presented.
+ */
 export interface TunnelDef {
   id: string;
-  /** Absent on tunnels saved before 0.6 — read those as local forwards. */
+  /** Absent on tunnels saved before 1.0 — read those as local forwards. */
   kind?: TunnelKind;
+  /** `local`/`dynamic`: the port we listen on. `remote`: the delivery port. */
   localPort: number;
-  /** Unused for `dynamic`, where the client picks the destination per request. */
+  /** Destination host. Unused for `dynamic`: each SOCKS request names its own. */
   remoteHost: string;
+  /** `local`: destination port. `remote`: the port the server listens on. */
   remotePort: number;
 }
+
+/** How each kind of forward describes itself in the UI. */
+export const TUNNEL_KIND_LABELS: Record<TunnelKind, { flag: string; title: string; blurb: string }> = {
+  local: {
+    flag: "-L",
+    title: "Local",
+    blurb:
+      "exposes a remote service on 127.0.0.1 — local 5433 → localhost:5432 to reach a database behind the server.",
+  },
+  remote: {
+    flag: "-R",
+    title: "Remote",
+    blurb:
+      "asks the server to listen for you and pipes what it receives back here — hand a colleague port 8080 on the server to reach your laptop's dev site.",
+  },
+  dynamic: {
+    flag: "-D",
+    title: "Dynamic",
+    blurb:
+      "runs a SOCKS5 proxy on 127.0.0.1; point a browser at it and every site it opens is reached from the server.",
+  },
+};
 
 export interface Connection {
   id: string;

@@ -14,6 +14,18 @@ export function formatBytes(bytes: number): string {
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${units[i]}`;
 }
 
+/** Elapsed time in the status bar's compact form: 42s, 7m 05s, 3h 12m. */
+export function formatDuration(ms: number): string {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const seconds = total % 60;
+  const minutes = Math.floor(total / 60) % 60;
+  const hours = Math.floor(total / 3600);
+  const p = (n: number) => String(n).padStart(2, "0");
+  if (hours) return `${hours}h ${p(minutes)}m`;
+  if (minutes) return `${minutes}m ${p(seconds)}s`;
+  return `${seconds}s`;
+}
+
 /** Compact local timestamp for log filenames, e.g. 20260702-211530. */
 export function timestamp(): string {
   const d = new Date();

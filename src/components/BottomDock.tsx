@@ -1,12 +1,17 @@
 import { useEffect, useRef, useState } from "react";
-import { CornerDownLeft, Pencil, RadioTower, Zap } from "lucide-react";
+import { CornerDownLeft, ListVideo, Pencil, RadioTower, Zap } from "lucide-react";
 import { useStore } from "../store";
 import {
   broadcastToTerminals,
   getTerminal,
+  sendMacro,
 } from "../lib/terminalRegistry";
 import { cn } from "../lib/utils";
 import { QuickCommandsModal } from "./QuickCommandsModal";
+import { MacrosModal } from "./MacrosModal";
+
+/** Protocols that present a terminal the dock can type into. */
+const TERMINAL_PROTOCOLS = ["ssh", "serial", "local", "telnet"];
 
 /**
  * Bottom dock under the workspace: XShell-style quick command chips plus a
@@ -17,16 +22,18 @@ export function BottomDock() {
   const sessions = useStore((s) => s.sessions);
   const activeId = useStore((s) => s.activeSessionId);
   const quickCommands = useStore((s) => s.quickCommands);
+  const macros = useStore((s) => s.macros);
 
   const [text, setText] = useState("");
   const [broadcast, setBroadcast] = useState(false);
   const [manageOpen, setManageOpen] = useState(false);
+  const [macrosOpen, setMacrosOpen] = useState(false);
   const [history, setHistory] = useState<string[]>([]);
   const [histIdx, setHistIdx] = useState(-1);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const terminalSessions = sessions.filter(
-    (s) => s.protocol === "ssh" || s.protocol === "serial"
+  const terminalSessions = sessions.filter((s) =>
+    TERMINAL_PROTOCOLS.includes(s.protocol)
   );
   const connectedIds = terminalSessions
     .filter((s) => s.status === "connected")
@@ -34,7 +41,7 @@ export function BottomDock() {
   const active = sessions.find((s) => s.id === activeId);
   const activeIsTerminal =
     !!active &&
-    (active.protocol === "ssh" || active.protocol === "serial") &&
+    TERMINAL_PROTOCOLS.includes(active.protocol) &&
     active.status === "connected";
 
   // Ctrl+K focuses the compose bar from anywhere.
@@ -91,7 +98,7 @@ export function BottomDock() {
   };
 
   return (
-    <div className="shrink-0 border-t border-edge bg-bg-panel">
+    <div className="shrink-0 border-t border-edge bg-bg-panel effect-surface">
       <div className="flex flex-wrap items-center gap-1 px-2 pt-1.5">
         <Zap size={11} className="mx-1 shrink-0 text-ink-dim" />
         {quickCommands.map((q) => (
@@ -121,6 +128,36 @@ export function BottomDock() {
           onClick={() => setManageOpen(true)}
           className="rounded p-1 text-ink-dim transition hover:bg-bg-hover hover:text-ink-hi"
           title="Manage quick commands"
+        >
+          <Pencil size={11} />
+        </button>
+      </div>
+
+      {/* Macros sit on their own row: a chip here replays several commands, so
+          mixing them in with the one-shot quick commands would be a trap. */}
+      <div className="flex flex-wrap items-center gap-1 px-2 pt-1">
+        <ListVideo size={11} className="mx-1 shrink-0 text-ink-dim" />
+        {macros.map((m) => (
+          <button
+            key={m.id}
+            disabled={!activeIsTerminal}
+            onClick={() => active && sendMacro(active.id, m.steps)}
+            className="rounded border border-edge bg-bg-elev px-2 py-0.5 font-mono text-[11px] text-ink-mid transition hover:border-accent/50 hover:text-ink-hi active:scale-[0.97] disabled:pointer-events-none disabled:opacity-40"
+            title={`${m.steps.length} step${m.steps.length === 1 ? "" : "s"}:\n${m.steps.join("\n")}\n\nreplays into the active terminal`}
+          >
+            {m.label}
+            <span className="ml-1.5 text-ink-dim">{m.steps.length}</span>
+          </button>
+        ))}
+        {macros.length === 0 && (
+          <span className="font-mono text-[10.5px] text-ink-dim">
+            macros — record a command sequence from a terminal's toolbar
+          </span>
+        )}
+        <button
+          onClick={() => setMacrosOpen(true)}
+          className="rounded p-1 text-ink-dim transition hover:bg-bg-hover hover:text-ink-hi"
+          title="Manage macros"
         >
           <Pencil size={11} />
         </button>
@@ -167,6 +204,12 @@ export function BottomDock() {
       </div>
 
       {manageOpen && <QuickCommandsModal onClose={() => setManageOpen(false)} />}
+      {macrosOpen && (
+        <MacrosModal
+          onClose={() => setMacrosOpen(false)}
+          runTarget={activeIsTerminal && active ? active.id : null}
+        />
+      )}
     </div>
   );
 }

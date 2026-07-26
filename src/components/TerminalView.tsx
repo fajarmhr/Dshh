@@ -11,6 +11,7 @@ import {
   Circle,
   CircleStop,
   FolderTree,
+  ListVideo,
   Network,
   RadioTower,
   RotateCw,
@@ -37,6 +38,7 @@ import {
   logStart,
   logStop,
   saveTextFile,
+  defaultLogDir,
 } from "../lib/api";
 import {
   broadcastToTerminals,
@@ -48,7 +50,7 @@ import { resolveTheme } from "../lib/themes";
 import { TunnelsModal } from "./TunnelsModal";
 import { ScpModal } from "./ScpModal";
 import type { Connection, Session } from "../lib/types";
-import { sanitizeFilename, timestamp } from "../lib/utils";
+import { formatDuration, sanitizeFilename, timestamp } from "../lib/utils";
 
 const SEARCH_DECORATIONS = {
   matchBackground: "#33415e",
@@ -92,6 +94,21 @@ export function TerminalView({
   const [query, setQuery] = useState("");
   const [tunnelsOpen, setTunnelsOpen] = useState(false);
   const [scpOpen, setScpOpen] = useState(false);
+  /** Label being typed to save a just-finished macro recording. */
+  const [macroLabel, setMacroLabel] = useState<string | null>(null);
+  /** Measured terminal grid, shown in the status bar. */
+  const [grid, setGrid] = useState({ cols: 0, rows: 0 });
+  /** When the current connection came up, for the status bar's uptime. */
+  const [connectedAt, setConnectedAt] = useState<number | null>(null);
+  const [uptime, setUptime] = useState("");
+
+  const recordingMacroFor = useStore((s) => s.recordingMacroFor);
+  const recordingSteps = useStore((s) => s.recordingSteps);
+  const recordingMacro = recordingMacroFor === session.id;
+  // Line assembled from keystrokes while recording. The shell's echo can't be
+  // used for this — it carries prompts, colour and completions — so the
+  // recorder tracks what was actually typed.
+  const macroLineRef = useRef("");
 
   const isSsh = session.protocol === "ssh";
   const isLocal = session.protocol === "local";
@@ -153,6 +170,19 @@ export function TerminalView({
     syncSize();
   }, [appearance]);
 
+  // Tick the status bar's uptime. Only runs while the bar is actually visible
+  // and a connection is up, so an idle app isn't re-rendering every second.
+  useEffect(() => {
+    if (!settings.statusBar || connectedAt === null) {
+      setUptime("");
+      return;
+    }
+    const tick = () => setUptime(formatDuration(Date.now() - connectedAt));
+    tick();
+    const timer = setInterval(tick, 1000);
+    return () => clearInterval(timer);
+  }, [settings.statusBar, connectedAt]);
+
   // Highlight rules live in a ref so the byte pipeline reads the latest
   // settings without re-connecting.
   const rulesRef = useRef<{ enabled: boolean; compiled: CompiledRule[] }>({
@@ -182,6 +212,10 @@ export function TerminalView({
 
   const syncSize = () => {
     fitRef.current?.fit();
+    const term = termRef.current;
+    // Mirror the measured grid for the status bar. A hidden split pane fits to
+    // 0×0, which is not worth showing.
+    if (term?.cols && term?.rows) setGrid({ cols: term.cols, rows: term.rows });
     pushResize();
   };
 
@@ -195,8 +229,31 @@ export function TerminalView({
     );
   };
 
+  /**
+   * Feed keystrokes to the macro recorder, reconstructing command lines as they
+   * are typed. Only the plain editing keys are honoured: arrow keys, tabs and
+   * control sequences depend on shell state we can't replay, so a line that
+   * used them is captured as whatever visible text remained.
+   */
+  const recordKeystrokes = (data: string) => {
+    for (const ch of data) {
+      if (ch === "\r" || ch === "\n") {
+        useStore.getState().recordStep(macroLineRef.current);
+        macroLineRef.current = "";
+      } else if (ch === "\x7f" || ch === "\b") {
+        macroLineRef.current = macroLineRef.current.slice(0, -1);
+      } else if (ch === "\x03" || ch === "\x15") {
+        // Ctrl+C / Ctrl+U abandon the line rather than submitting it.
+        macroLineRef.current = "";
+      } else if (ch >= " ") {
+        macroLineRef.current += ch;
+      }
+    }
+  };
+
   // Multi-execution: mirror typed input to every other live terminal.
   const handleInput = (data: string) => {
+    if (useStore.getState().recordingMacroFor === session.id) recordKeystrokes(data);
     if (useStore.getState().broadcastInput) {
       const others = useStore
         .getState()
@@ -228,6 +285,7 @@ export function TerminalView({
       const onClosed = () => {
         if (life.dead || !backendId.current) return;
         backendId.current = null;
+        setConnectedAt(null);
         setRecording(false);
         unregisterTerminal(session.id);
         useStore.getState().setSessionStatus(session.id, "closed");
@@ -263,6 +321,7 @@ export function TerminalView({
       }
 
       backendId.current = id;
+      setConnectedAt(Date.now());
       setStatus(session.id, "connected");
       registerTerminal(session.id, {
         send: (d) => writeBackend(d),
@@ -286,8 +345,11 @@ export function TerminalView({
       }
 
       const st = useStore.getState().settings;
-      if (st.autoLog && st.logDir) {
-        const path = autoLogPath(st.logDir, conn.name);
+      // No folder chosen falls back to the portable data folder, so auto-log
+      // works out of the box instead of silently doing nothing.
+      const autoDir = st.logDir || (await defaultLogDir());
+      if (st.autoLog && autoDir) {
+        const path = autoLogPath(autoDir, conn.name);
         try {
           await logStart(id, path);
           setRecording(true);
@@ -406,8 +468,9 @@ export function TerminalView({
       return;
     }
     let path: string | null;
-    if (settings.logDir) {
-      path = autoLogPath(settings.logDir, conn.name);
+    const dir = settings.logDir || (await defaultLogDir());
+    if (dir) {
+      path = autoLogPath(dir, conn.name);
     } else {
       path = await saveDialog({
         defaultPath: `${sanitizeFilename(conn.name)}_${timestamp()}.log`,
@@ -422,6 +485,43 @@ export function TerminalView({
     } catch (e) {
       setNote(`Recording failed: ${String(e)}`);
     }
+  };
+
+  const toggleMacroRecording = () => {
+    const store = useStore.getState();
+    if (!recordingMacro) {
+      macroLineRef.current = "";
+      store.startRecording(session.id);
+      setNote("Recording a macro — run the commands you want captured");
+      termRef.current?.focus();
+      return;
+    }
+    // Flush a line left sitting on the prompt, so stopping without pressing
+    // enter still captures what was typed.
+    if (macroLineRef.current.trim()) store.recordStep(macroLineRef.current);
+    macroLineRef.current = "";
+    // Re-read: recordStep above may have just added the first step.
+    if (useStore.getState().recordingSteps.length === 0) {
+      store.cancelRecording();
+      setNote("Nothing was recorded — macro discarded");
+      return;
+    }
+    setMacroLabel("");
+  };
+
+  const saveMacro = () => {
+    const steps = useStore.getState().recordingSteps.length;
+    useStore.getState().stopRecording(macroLabel ?? "");
+    setMacroLabel(null);
+    setNote(`Macro saved · ${steps} step${steps === 1 ? "" : "s"}`);
+    termRef.current?.focus();
+  };
+
+  const discardMacro = () => {
+    useStore.getState().cancelRecording();
+    setMacroLabel(null);
+    setNote("Macro discarded");
+    termRef.current?.focus();
   };
 
   const findNext = (incremental = false) => {
@@ -453,6 +553,13 @@ export function TerminalView({
     connect();
   };
 
+  /** What this session is attached to, as shown in the toolbar and status bar. */
+  const target = isSerial
+    ? `${conn.serialPort} · ${conn.baudRate}`
+    : isLocal
+      ? `local · ${conn.shell ?? "shell"}`
+      : `${conn.username ? conn.username + "@" : ""}${conn.host}:${conn.port}`;
+
   const statusColor =
     session.status === "connected"
       ? "bg-ok"
@@ -463,16 +570,10 @@ export function TerminalView({
           : "bg-ink-dim";
 
   return (
-    <div className="relative flex h-full w-full flex-col bg-bg-base">
-      <div className="flex h-9 shrink-0 items-center gap-2 border-b border-edge bg-bg-panel px-2">
+    <div className="relative flex h-full w-full flex-col bg-bg-base effect-base">
+      <div className="flex h-9 shrink-0 items-center gap-2 border-b border-edge bg-bg-panel effect-surface px-2">
         <span className={`ml-1 h-1.5 w-1.5 shrink-0 rounded-full ${statusColor}`} />
-        <span className="shrink-0 font-mono text-[10.5px] text-ink-dim">
-          {session.protocol === "serial"
-            ? `${conn.serialPort} · ${conn.baudRate}`
-            : session.protocol === "local"
-              ? `local · ${conn.shell ?? "shell"}`
-              : `${conn.username ? conn.username + "@" : ""}${conn.host}:${conn.port}`}
-        </span>
+        <span className="shrink-0 font-mono text-[10.5px] text-ink-dim">{target}</span>
         {note && (
           <span className="min-w-0 flex-1 truncate font-mono text-[10.5px] text-ink-dim">
             {note}
@@ -526,6 +627,25 @@ export function TerminalView({
             {broadcastInput ? "Broadcast ON" : "Broadcast"}
           </button>
           <button
+            onClick={toggleMacroRecording}
+            disabled={!connected || (!!recordingMacroFor && !recordingMacro)}
+            className={`flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition active:scale-[0.97] disabled:pointer-events-none disabled:opacity-30 ${
+              recordingMacro
+                ? "bg-accent/15 text-accent hover:bg-accent/25"
+                : "text-ink-mid hover:bg-bg-hover hover:text-ink-hi"
+            }`}
+            title={
+              recordingMacro
+                ? "Stop recording and name this macro"
+                : recordingMacroFor
+                  ? "Another session is recording a macro"
+                  : "Record the commands you type into a replayable macro"
+            }
+          >
+            <ListVideo size={14} />
+            {recordingMacro ? `Macro ${recordingSteps.length}` : "Macro"}
+          </button>
+          <button
             onClick={() => setSearchOpen(true)}
             className="tb-btn"
             title="Search buffer (Ctrl+F)"
@@ -548,10 +668,10 @@ export function TerminalView({
                 ? "bg-err/15 text-err hover:bg-err/25"
                 : "text-ink-mid hover:bg-bg-hover hover:text-ink-hi"
             }`}
-            title={recording ? "Stop recording session log" : "Record session to a log file"}
+            title={recording ? "Stop writing the session log" : "Write this session to a log file"}
           >
             {recording ? <CircleStop size={14} /> : <Circle size={14} />}
-            {recording ? "Recording" : "Record"}
+            {recording ? "Logging" : "Log"}
           </button>
         </div>
       </div>
@@ -561,6 +681,28 @@ export function TerminalView({
           <div ref={containerRef} className="h-full w-full" />
         </div>
       </div>
+
+      {settings.statusBar && (
+        <div className="flex h-6 shrink-0 items-center gap-3 border-t border-edge bg-bg-panel effect-surface px-3 font-mono text-[10px] text-ink-dim">
+          <span className="flex items-center gap-1.5">
+            <span className={`h-1 w-1 shrink-0 rounded-full ${statusColor}`} />
+            {session.status}
+          </span>
+          <span className="min-w-0 truncate text-ink-mid">{target}</span>
+          <div className="ml-auto flex shrink-0 items-center gap-3">
+            {recording && <span className="text-err">● log</span>}
+            {runningTunnels > 0 && <span className="text-ok">{runningTunnels} fwd</span>}
+            {recordingMacro && <span className="text-accent">● macro</span>}
+            {uptime && <span title="Time connected">{uptime}</span>}
+            {usesPty && grid.cols > 0 && (
+              <span title="Terminal grid">
+                {grid.cols}×{grid.rows}
+              </span>
+            )}
+            <span title="Terminal encoding">UTF-8</span>
+          </div>
+        </div>
+      )}
 
       {searchOpen && (
         <div className="absolute right-4 top-11 z-10 flex animate-fade-up items-center gap-1 rounded-lg border border-edge bg-bg-panel/95 px-2 py-1.5 shadow-[0_12px_32px_-8px_rgba(4,10,20,0.8)] backdrop-blur-sm">
@@ -595,6 +737,32 @@ export function TerminalView({
             <ChevronDown size={13} />
           </button>
           <button onClick={closeSearch} className="tb-btn !p-1" title="Close (Esc)">
+            <X size={13} />
+          </button>
+        </div>
+      )}
+
+      {macroLabel !== null && (
+        <div className="absolute left-1/2 top-12 z-10 flex -translate-x-1/2 animate-fade-up items-center gap-2 rounded-lg border border-edge bg-bg-panel/95 py-1.5 pl-3 pr-1.5 shadow-[0_12px_32px_-8px_rgba(4,10,20,0.8)] backdrop-blur-sm">
+          <ListVideo size={13} className="shrink-0 text-accent" />
+          <span className="shrink-0 font-mono text-[10.5px] text-ink-dim">
+            {recordingSteps.length} step{recordingSteps.length === 1 ? "" : "s"}
+          </span>
+          <input
+            autoFocus
+            value={macroLabel}
+            onChange={(e) => setMacroLabel(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") saveMacro();
+              else if (e.key === "Escape") discardMacro();
+            }}
+            placeholder="name this macro"
+            className="w-44 bg-transparent font-mono text-xs text-ink-hi outline-none placeholder:text-ink-dim"
+          />
+          <button onClick={saveMacro} className="btn-primary !px-2.5 !py-1 !text-xs">
+            Save
+          </button>
+          <button onClick={discardMacro} className="tb-btn !p-1" title="Discard (Esc)">
             <X size={13} />
           </button>
         </div>

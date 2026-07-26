@@ -42,11 +42,15 @@ jobs:
       - name: Collect artifacts
         shell: pwsh
         run: |
+          # The portable folder (exe + data/ + README) is what people download,
+          # and only this script builds it — see scripts/package-portable.ps1.
+          # -SkipBuild reuses the binary the step above produced.
+          ./scripts/package-portable.ps1 -SkipBuild
           New-Item -ItemType Directory -Force dist-release | Out-Null
-          Copy-Item src-tauri/target/release/dshh.exe dist-release/Dshh-portable.exe
-          # Zip is the primary website download (avoids browser warnings on bare
-          # .exe); the raw exe stays published for the in-app self-updater.
-          Compress-Archive -Path dist-release/Dshh-portable.exe -DestinationPath dist-release/Dshh-portable.zip -Force
+          # share/ holds both the folder zip and the bare exe the in-app
+          # updater hot-swaps (update.rs, PORTABLE_ASSET).
+          Copy-Item share/Dshh-*-portable.zip dist-release/
+          Copy-Item share/Dshh-portable.exe dist-release/
           Get-ChildItem src-tauri/target/release/bundle/nsis/*-setup.exe -ErrorAction SilentlyContinue | Copy-Item -Destination dist-release/
           Get-ChildItem src-tauri/target/release/bundle/msi/*.msi -ErrorAction SilentlyContinue | Copy-Item -Destination dist-release/
           Get-ChildItem dist-release

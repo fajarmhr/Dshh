@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   Build Dshh and package it as a portable folder inside a distributable zip.
 
@@ -68,12 +68,21 @@ Everything the app writes stays in this folder:
 
     Dshh\
       dshh.exe
-      data\
-        webview\    settings and saved connections
-        logs\       session logs, when logging is enabled
+      data\             empty until first run — see below
+        webview\        settings and saved connections
+        logs\           session logs, when logging is enabled
+
+data\ ships empty on purpose. It is not part of the program — dshh.exe is
+complete on its own — it is where the app puts what *you* create, from the
+first time you run it. Nothing is missing if it looks bare.
 
 To move Dshh to another machine, copy the whole Dshh folder. Your connections,
-groups, colours, themes and preferences travel with it.
+groups, colours, themes and preferences travel with it. Copying dshh.exe alone
+leaves your data behind, and the copy starts empty.
+
+Upgrading from a non-portable Dshh? The first portable run copies your existing
+settings and saved connections across from your Windows user profile. The
+originals are left untouched.
 
 To uninstall, delete the folder. Nothing is left behind in the registry or in
 your user profile.

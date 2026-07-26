@@ -1,5 +1,6 @@
 mod crypto;
 mod edit;
+mod effects;
 mod ftp;
 mod local;
 mod localfs;
@@ -139,6 +140,7 @@ pub fn run() {
             logs::read_text_file,
             tunnel::tunnel_start,
             tunnel::tunnel_stop,
+            tunnel::tunnel_stats,
             telnet::telnet_open,
             telnet::telnet_write,
             telnet::telnet_close,
@@ -155,6 +157,8 @@ pub fn run() {
             update::update_restart,
             update::open_url,
             portable::portable_data_dir,
+            portable::default_log_dir,
+            effects::set_window_effect,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Dshh");

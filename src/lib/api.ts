@@ -1,5 +1,5 @@
 import { invoke, Channel } from "@tauri-apps/api/core";
-import type { Connection, Listing, LocalShell, RemoteFile } from "./types";
+import type { Connection, Listing, LocalShell, RemoteFile, TunnelKind } from "./types";
 
 /**
  * All backend calls funnel through here. Terminal-style byte streams
@@ -133,14 +133,26 @@ export const ftpUpload = (id: string, local: string, remote: string) =>
   invoke("ftp_upload", { id, local, remote });
 export const ftpDisconnect = (id: string) => invoke("ftp_disconnect", { id });
 
-// ---- Port forwarding (ssh -L) ----
+// ---- Port forwarding (ssh -L / -R / -D) ----
 export const tunnelStart = (
   conn: Connection,
+  kind: TunnelKind,
   localPort: number,
   remoteHost: string,
   remotePort: number
-) => invoke<string>("tunnel_start", { conn, localPort, remoteHost, remotePort });
+) => invoke<string>("tunnel_start", { conn, kind, localPort, remoteHost, remotePort });
 export const tunnelStop = (id: string) => invoke("tunnel_stop", { id });
+
+/** Live byte counters for a forward, as read by the traffic indicators. */
+export interface TunnelStats {
+  tx: number;
+  rx: number;
+  open: number;
+  total: number;
+}
+/** Counters for the given backend tunnel ids; ids no longer running are absent. */
+export const tunnelStats = (ids: string[]) =>
+  invoke<Record<string, TunnelStats>>("tunnel_stats", { ids });
 
 // ---- Master password (secrets encrypted at rest with AES-GCM) ----
 export interface MasterMeta {
@@ -173,6 +185,21 @@ export const appVersion = () => invoke<string>("app_version");
  * non-portably (settings then live in the per-user WebView2 profile).
  */
 export const portableDataDir = () => invoke<string>("portable_data_dir");
+/**
+ * Where logs land when the user hasn't chosen a folder: `logs` inside the
+ * portable data folder, or "" when running non-portably. Memoised — it cannot
+ * change while the app is running, and it is read on every Record click.
+ */
+let logDirDefault: Promise<string> | null = null;
+export const defaultLogDir = () =>
+  (logDirDefault ??= invoke<string>("default_log_dir").catch(() => ""));
+/**
+ * Apply a Windows 11 backdrop. Rejects when the material is unavailable (any
+ * OS but Windows 11), so callers should only dim their own backgrounds after
+ * this resolves.
+ */
+export const setWindowEffect = (effect: string) =>
+  invoke("set_window_effect", { effect });
 export const updateCheck = () => invoke<UpdateInfo>("update_check");
 export const updateApply = (assetUrl: string) => invoke("update_apply", { assetUrl });
 export const updateRestart = () => invoke("update_restart");

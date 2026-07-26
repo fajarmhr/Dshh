@@ -165,7 +165,7 @@ export function Sidebar({
     <aside
       ref={asideRef}
       style={{ width }}
-      className={`relative flex shrink-0 flex-col border-r border-edge bg-bg-panel ${
+      className={`relative flex shrink-0 flex-col border-r border-edge bg-bg-panel effect-surface ${
         resizing ? "select-none" : ""
       }`}
     >

@@ -8,6 +8,7 @@ import {
   saveTextFile,
   secretsDecrypt,
   secretsEncrypt,
+  setWindowEffect,
 } from "./lib/api";
 import { DEFAULT_THEME_ID } from "./lib/themes";
 import type {
@@ -264,6 +265,9 @@ interface AppState {
   recordStep: (command: string) => void;
   /** Finish recording; saves under `label` when at least one step was captured. */
   stopRecording: (label: string) => void;
+  /** Discard an in-progress recording without saving anything. */
+  cancelRecording: () => void;
+  updateMacro: (id: string, patch: Partial<Omit<Macro, "id">>) => void;
   removeMacro: (id: string) => void;
 
   setTunnelActive: (defId: string, backendId: string | null) => void;
@@ -379,11 +383,16 @@ export const useStore = create<AppState>((set, get) => ({
         (c) => c.id !== closing.connectionId
       );
     }
+    // A macro recording belongs to the session it was capturing; closing that
+    // session ends it rather than leaving the recorder pointed at a dead tab.
+    const recording = get().recordingMacroFor === id ? null : get().recordingMacroFor;
     set({
       sessions: remaining,
       activeSessionId: active,
       splitSessionId: split,
       transientConnections,
+      recordingMacroFor: recording,
+      recordingSteps: recording ? get().recordingSteps : [],
     });
   },
 
@@ -459,6 +468,14 @@ export const useStore = create<AppState>((set, get) => ({
       set({ macros });
     }
     set({ recordingMacroFor: null, recordingSteps: [] });
+  },
+
+  cancelRecording: () => set({ recordingMacroFor: null, recordingSteps: [] }),
+
+  updateMacro: (id, patch) => {
+    const macros = get().macros.map((m) => (m.id === id ? { ...m, ...patch } : m));
+    persistMacros(macros);
+    set({ macros });
   },
 
   removeMacro: (id) => {
@@ -577,6 +594,23 @@ export async function changeMaster(current: string, next: string): Promise<boole
   useStore.setState({ connections: plain, masterLocked: false });
   persistAll(plain);
   return true;
+}
+
+/**
+ * Apply the saved backdrop. The `data-effect` attribute — which is what dims
+ * the app's own backgrounds — is only set once the backend confirms the
+ * material is really in place; a translucent app over a window that never got
+ * its mica would just look washed out. Returns an error message, or null.
+ */
+export async function applyWindowEffect(effect: WindowEffect): Promise<string | null> {
+  try {
+    await setWindowEffect(effect);
+    document.documentElement.dataset.effect = effect;
+    return null;
+  } catch (e) {
+    document.documentElement.dataset.effect = "opaque";
+    return String(e);
+  }
 }
 
 /** Startup hook: load saved sessions from the configured folder, if any. */
