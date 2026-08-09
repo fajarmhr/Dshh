@@ -1,3 +1,4 @@
+mod clipboard;
 mod crypto;
 mod edit;
 mod effects;
@@ -138,6 +139,8 @@ pub fn run() {
             logs::log_stop,
             logs::save_text_file,
             logs::read_text_file,
+            clipboard::clipboard_read,
+            clipboard::clipboard_write,
             tunnel::tunnel_start,
             tunnel::tunnel_stop,
             tunnel::tunnel_stats,

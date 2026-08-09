@@ -41,7 +41,8 @@ browser.
   `▾` menu, or save a reusable **Local** profile. **Run as Administrator** elevates through
   UAC and opens in its own window (an elevated shell can't share this app's console).
 - **Real terminal** — xterm.js with buffer search (`Ctrl+F`), keyword highlighting,
-  session recording, and save-to-file. Terminal size stays in lock-step with the remote
+  session recording, and save-to-file. Right-click copies the selection, or pastes when
+  nothing is selected. Terminal size stays in lock-step with the remote
   PTY, so cursor editing (`←/→`, history) never smears. An optional **status bar**
   carries the target, time connected, grid size and encoding.
 - **Windows 11 backdrop (optional)** — Mica or acrylic behind the app chrome,

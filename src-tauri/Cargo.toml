@@ -1,6 +1,6 @@
 [package]
 name = "dshh"
-version = "1.0.0"
+version = "1.0.1"
 description = "Multi-protocol connection client"
 authors = ["you"]
 edition = "2021"
@@ -15,6 +15,7 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 aes-gcm = "0.10"
 anyhow = "1.0.103"
+arboard = { version = "3.6.1", default-features = false }
 argon2 = "0.5"
 base64 = "0.22"
 async-trait = "0.1.89"

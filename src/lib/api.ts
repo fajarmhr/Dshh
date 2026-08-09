@@ -212,3 +212,10 @@ export const saveTextFile = (path: string, contents: string) =>
   invoke("save_text_file", { path, contents });
 export const readTextFile = (path: string) =>
   invoke<string>("read_text_file", { path });
+
+// ---- Clipboard ----
+// Goes through Rust rather than `navigator.clipboard`, which can't read the
+// clipboard inside a Tauri webview. Reading an empty or non-text clipboard
+// yields "" instead of throwing.
+export const clipboardRead = () => invoke<string>("clipboard_read");
+export const clipboardWrite = (text: string) => invoke("clipboard_write", { text });

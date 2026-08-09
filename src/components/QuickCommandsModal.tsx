@@ -19,12 +19,21 @@ export function QuickCommandsModal({ onClose }: { onClose: () => void }) {
     setCommand("");
   };
 
+  // Nothing in this modal has cancel semantics — edits to existing rows persist
+  // as you type — so a filled-in new row shouldn't be the one thing thrown
+  // away. Every close path commits it first, which is what makes adding a
+  // single command work without having to start a second one.
+  const close = () => {
+    add();
+    onClose();
+  };
+
   return (
-    <div className="modal-overlay" {...overlayDismiss(onClose)}>
+    <div className="modal-overlay" {...overlayDismiss(close)}>
       <div className="modal-shell w-[560px]" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-edge px-5 py-3">
           <h2 className="text-sm font-semibold text-ink-hi">Quick commands</h2>
-          <button onClick={onClose} className="tb-btn">
+          <button onClick={close} className="tb-btn">
             <X size={16} />
           </button>
         </div>
@@ -69,6 +78,7 @@ export function QuickCommandsModal({ onClose }: { onClose: () => void }) {
               value={label}
               placeholder="label"
               onChange={(e) => setLabel(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && add()}
             />
             <input
               className="field-input flex-1 font-mono text-[12.5px]"
@@ -88,8 +98,11 @@ export function QuickCommandsModal({ onClose }: { onClose: () => void }) {
           </div>
         </div>
 
-        <div className="flex justify-end border-t border-edge px-5 py-3">
-          <button onClick={onClose} className="btn-primary">
+        <div className="flex items-center justify-between border-t border-edge px-5 py-3">
+          <span className="font-mono text-[10px] text-ink-dim">
+            a filled-in row is saved when you press Done
+          </span>
+          <button onClick={close} className="btn-primary">
             Done
           </button>
         </div>

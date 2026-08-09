@@ -39,6 +39,8 @@ import {
   logStop,
   saveTextFile,
   defaultLogDir,
+  clipboardRead,
+  clipboardWrite,
 } from "../lib/api";
 import {
   broadcastToTerminals,
@@ -262,6 +264,38 @@ export function TerminalView({
       broadcastToTerminals(others, data);
     }
     writeBackend(data);
+  };
+
+  /**
+   * PuTTY/MobaXterm-style right click: copy when text is selected, paste when
+   * nothing is. Copying also drops the selection, so "select a line, right
+   * click to copy, right click again to paste" falls out of the same gesture
+   * with no menu in the way.
+   */
+  const handleContextMenu = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    const term = termRef.current;
+    if (!term) return;
+    const selection = term.getSelection();
+    if (selection) {
+      try {
+        await clipboardWrite(selection);
+        term.clearSelection();
+      } catch (err) {
+        setNote(`Copy failed: ${String(err)}`);
+      }
+    } else {
+      try {
+        const text = await clipboardRead();
+        // paste() rather than writeBackend(): it applies bracketed-paste mode
+        // and newline normalisation, and emits through onData, so broadcast
+        // and the macro recorder see it exactly like typed input.
+        if (text) term.paste(text);
+      } catch (err) {
+        setNote(`Paste failed: ${String(err)}`);
+      }
+    }
+    term.focus();
   };
 
   const connect = async () => {
@@ -678,7 +712,7 @@ export function TerminalView({
 
       <div className="min-h-0 flex-1 p-2">
         <div className="h-full w-full overflow-hidden rounded-lg border border-edge bg-bg-inset p-2">
-          <div ref={containerRef} className="h-full w-full" />
+          <div ref={containerRef} className="h-full w-full" onContextMenu={handleContextMenu} />
         </div>
       </div>
 
