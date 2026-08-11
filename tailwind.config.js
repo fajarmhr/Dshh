@@ -57,12 +57,18 @@ export default {
           "0%, 54%": { opacity: "1" },
           "55%, 100%": { opacity: "0" },
         },
+        /* Indeterminate transfer bar: used when the server won't report a size. */
+        "transfer-sweep": {
+          from: { transform: "translateX(-100%)" },
+          to: { transform: "translateX(300%)" },
+        },
       },
       animation: {
         "fade-up": "fade-up 0.25s cubic-bezier(0.16, 1, 0.3, 1) both",
         "modal-in": "modal-in 0.22s cubic-bezier(0.16, 1, 0.3, 1) both",
         "overlay-in": "overlay-in 0.18s ease-out both",
         blink: "blink 1.1s step-end infinite",
+        "transfer-sweep": "transfer-sweep 1.1s ease-in-out infinite",
       },
     },
   },

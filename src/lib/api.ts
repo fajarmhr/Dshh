@@ -17,6 +17,24 @@ function byteChannel(onData: ByteHandler): Channel<number[]> {
   return chan;
 }
 
+/** Live byte counts for a running transfer; `total` is 0 when unknown. */
+export interface TransferProgress {
+  done: number;
+  total: number;
+}
+export type ProgressHandler = (p: TransferProgress) => void;
+
+/**
+ * Every transfer command takes a progress channel — the Rust side has no
+ * optional-channel argument — so callers that don't draw a bar still get one,
+ * with no handler attached.
+ */
+function progressChannel(onProgress?: ProgressHandler): Channel<TransferProgress> {
+  const chan = new Channel<TransferProgress>();
+  if (onProgress) chan.onmessage = onProgress;
+  return chan;
+}
+
 // ---- SSH (interactive shell) ----
 export async function sshConnect(
   conn: Connection,
@@ -108,29 +126,53 @@ export async function editStart(
 export const editStop = (id: string) => invoke("edit_stop", { id });
 
 // ---- SCP (file copy over the SSH exec channel) ----
-export const scpUpload = (conn: Connection, local: string, remote: string) =>
-  invoke("scp_upload", { conn, local, remote });
-export const scpDownload = (conn: Connection, remote: string, local: string) =>
-  invoke("scp_download", { conn, remote, local });
+export const scpUpload = (
+  conn: Connection,
+  local: string,
+  remote: string,
+  onProgress?: ProgressHandler
+) => invoke("scp_upload", { conn, local, remote, onProgress: progressChannel(onProgress) });
+export const scpDownload = (
+  conn: Connection,
+  remote: string,
+  local: string,
+  onProgress?: ProgressHandler
+) => invoke("scp_download", { conn, remote, local, onProgress: progressChannel(onProgress) });
 
 // ---- SFTP ----
 export const sftpConnect = (conn: Connection) => invoke<string>("sftp_connect", { conn });
 export const sftpList = (id: string, path: string) =>
   invoke<Listing>("sftp_list", { id, path });
-export const sftpDownload = (id: string, remote: string, local: string) =>
-  invoke("sftp_download", { id, remote, local });
-export const sftpUpload = (id: string, local: string, remote: string) =>
-  invoke("sftp_upload", { id, local, remote });
+export const sftpDownload = (
+  id: string,
+  remote: string,
+  local: string,
+  onProgress?: ProgressHandler
+) => invoke("sftp_download", { id, remote, local, onProgress: progressChannel(onProgress) });
+export const sftpUpload = (
+  id: string,
+  local: string,
+  remote: string,
+  onProgress?: ProgressHandler
+) => invoke("sftp_upload", { id, local, remote, onProgress: progressChannel(onProgress) });
 export const sftpDisconnect = (id: string) => invoke("sftp_disconnect", { id });
 
 // ---- FTP ----
 export const ftpConnect = (conn: Connection) => invoke<string>("ftp_connect", { conn });
 export const ftpList = (id: string, path: string) =>
   invoke<Listing>("ftp_list", { id, path });
-export const ftpDownload = (id: string, remote: string, local: string) =>
-  invoke("ftp_download", { id, remote, local });
-export const ftpUpload = (id: string, local: string, remote: string) =>
-  invoke("ftp_upload", { id, local, remote });
+export const ftpDownload = (
+  id: string,
+  remote: string,
+  local: string,
+  onProgress?: ProgressHandler
+) => invoke("ftp_download", { id, remote, local, onProgress: progressChannel(onProgress) });
+export const ftpUpload = (
+  id: string,
+  local: string,
+  remote: string,
+  onProgress?: ProgressHandler
+) => invoke("ftp_upload", { id, local, remote, onProgress: progressChannel(onProgress) });
 export const ftpDisconnect = (id: string) => invoke("ftp_disconnect", { id });
 
 // ---- Port forwarding (ssh -L / -R / -D) ----

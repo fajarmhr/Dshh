@@ -612,6 +612,22 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                   <span className="text-sm text-ink-hi">Blink the cursor</span>
                 </label>
 
+                <label className="flex cursor-pointer items-start gap-2.5 rounded-md px-1 py-2">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    checked={settings.pasteWarnMultiline}
+                    onChange={(e) => setSettings({ pasteWarnMultiline: e.target.checked })}
+                  />
+                  <span className="text-sm text-ink-hi">
+                    Confirm multi-line pastes
+                    <span className="mt-0.5 block text-[11px] leading-relaxed text-ink-dim">
+                      Pasting two or more lines shows them first — every newline is
+                      an Enter, so a stray copy would run commands.
+                    </span>
+                  </span>
+                </label>
+
                 <p className="text-[11px] leading-relaxed text-ink-dim">
                   Applies to every open terminal immediately. A connection can
                   override the scheme and size for itself in its edit dialog.

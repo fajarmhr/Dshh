@@ -2,6 +2,7 @@ import { useState } from "react";
 import { ArrowDownToLine, ArrowUpFromLine, X } from "lucide-react";
 import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { scpUpload, scpDownload } from "../lib/api";
+import { TransferBar, type Transfer } from "./TransferBar";
 import type { Connection } from "../lib/types";
 import { overlayDismiss } from "../lib/utils";
 
@@ -23,6 +24,8 @@ export function ScpModal({
   const [busy, setBusy] = useState<null | "up" | "down">(null);
   const [msg, setMsg] = useState("");
   const [error, setError] = useState("");
+  /** Live byte counts for the transfer in flight. */
+  const [transfer, setTransfer] = useState<Transfer | null>(null);
 
   const pickLocal = async () => {
     const picked = await openDialog({ multiple: false });
@@ -37,13 +40,17 @@ export function ScpModal({
     setBusy("up");
     setError("");
     setMsg("Uploading…");
+    const name = localUp.split(/[\/]/).pop() ?? localUp;
     try {
-      await scpUpload(conn, localUp, remoteUp.trim());
+      await scpUpload(conn, localUp, remoteUp.trim(), (p) =>
+        setTransfer({ name, dir: "up", ...p })
+      );
       setMsg(`Uploaded to ${remoteUp.trim()}`);
     } catch (e) {
       setError(String(e));
       setMsg("");
     } finally {
+      setTransfer(null);
       setBusy(null);
     }
   };
@@ -57,12 +64,15 @@ export function ScpModal({
     setError("");
     setMsg("Downloading…");
     try {
-      await scpDownload(conn, remoteDown.trim(), local);
+      await scpDownload(conn, remoteDown.trim(), local, (p) =>
+        setTransfer({ name, dir: "down", ...p })
+      );
       setMsg(`Downloaded to ${local}`);
     } catch (e) {
       setError(String(e));
       setMsg("");
     } finally {
+      setTransfer(null);
       setBusy(null);
     }
   };
@@ -144,6 +154,12 @@ export function ScpModal({
               </button>
             </div>
           </div>
+
+          {transfer && (
+            <div className="rounded-md border border-edge bg-bg-elev py-0.5">
+              <TransferBar transfer={transfer} />
+            </div>
+          )}
 
           {msg && !error && (
             <div className="rounded-md border border-edge bg-bg-elev px-3 py-2 font-mono text-[11px] text-ink-mid">

@@ -49,10 +49,16 @@ import {
 } from "../lib/terminalRegistry";
 import { applyHighlights, compileRules, type CompiledRule } from "../lib/highlight";
 import { resolveTheme } from "../lib/themes";
+import { PasteConfirm } from "./PasteConfirm";
 import { TunnelsModal } from "./TunnelsModal";
 import { ScpModal } from "./ScpModal";
 import type { Connection, Session } from "../lib/types";
-import { formatDuration, sanitizeFilename, timestamp } from "../lib/utils";
+import {
+  formatDuration,
+  sanitizeFilename,
+  splitPasteLines,
+  timestamp,
+} from "../lib/utils";
 
 const SEARCH_DECORATIONS = {
   matchBackground: "#33415e",
@@ -155,6 +161,9 @@ export function TerminalView({
   // rebuilding the Terminal would drop the scrollback and the live connection.
   const appearanceRef = useRef(appearance);
   appearanceRef.current = appearance;
+  // Same reason, for the handlers that only read settings when they fire.
+  const settingsRef = useRef(settings);
+  settingsRef.current = settings;
 
   // Push appearance changes onto the live terminal instead of recreating it.
   // Font metrics drive the column count, so a size change has to re-fit and
@@ -267,6 +276,48 @@ export function TerminalView({
   };
 
   /**
+   * Clipboard text waiting on the multi-line confirmation, or null when
+   * nothing is pending.
+   */
+  const [pastePending, setPastePending] = useState<string | null>(null);
+
+  /**
+   * Every paste funnels through here. A multi-line paste is the classic
+   * footgun — each newline is an Enter to the shell, so a stray copy runs
+   * commands instead of typing them — so those stop for confirmation showing
+   * the exact lines. Single-line pastes go straight through.
+   */
+  const guardedPaste = (text: string) => {
+    const term = termRef.current;
+    if (!term || !text) return;
+    if (settingsRef.current.pasteWarnMultiline && splitPasteLines(text).length > 1) {
+      setPastePending(text);
+      return;
+    }
+    // paste() rather than writeBackend(): it applies bracketed-paste mode and
+    // newline normalisation, and emits through onData, so broadcast and the
+    // macro recorder see it exactly like typed input.
+    term.paste(text);
+  };
+  // The DOM paste listener is registered once, on mount; it reads the current
+  // guard through this ref rather than closing over a stale render.
+  const pasteRef = useRef(guardedPaste);
+  pasteRef.current = guardedPaste;
+
+  const confirmPaste = () => {
+    const text = pastePending;
+    setPastePending(null);
+    const term = termRef.current;
+    if (term && text) term.paste(text);
+    term?.focus();
+  };
+
+  const cancelPaste = () => {
+    setPastePending(null);
+    termRef.current?.focus();
+  };
+
+  /**
    * PuTTY/MobaXterm-style right click: copy when text is selected, paste when
    * nothing is. Copying also drops the selection, so "select a line, right
    * click to copy, right click again to paste" falls out of the same gesture
@@ -286,11 +337,7 @@ export function TerminalView({
       }
     } else {
       try {
-        const text = await clipboardRead();
-        // paste() rather than writeBackend(): it applies bracketed-paste mode
-        // and newline normalisation, and emits through onData, so broadcast
-        // and the macro recorder see it exactly like typed input.
-        if (text) term.paste(text);
+        guardedPaste(await clipboardRead());
       } catch (err) {
         setNote(`Paste failed: ${String(err)}`);
       }
@@ -424,6 +471,20 @@ export function TerminalView({
 
     term.onData((d) => handleInput(d));
 
+    // Catch every paste route the webview offers — Ctrl+V, Ctrl+Shift+V,
+    // Shift+Insert, the webview's own menu — in the capture phase, before
+    // xterm's handler on the hidden textarea sees it, so the multi-line guard
+    // can't be walked around by using a different shortcut.
+    const host = containerRef.current;
+    const onPaste = (e: ClipboardEvent) => {
+      const text = e.clipboardData?.getData("text") ?? "";
+      if (!text) return;
+      e.preventDefault();
+      e.stopPropagation();
+      pasteRef.current(text);
+    };
+    host.addEventListener("paste", onPaste, true);
+
     term.attachCustomKeyEventHandler((e) => {
       if (e.type === "keydown" && e.ctrlKey && (e.key === "f" || e.key === "F")) {
         setSearchOpen(true);
@@ -447,6 +508,7 @@ export function TerminalView({
 
     return () => {
       life.dead = true;
+      host.removeEventListener("paste", onPaste, true);
       ro.disconnect();
       unregisterTerminal(session.id);
       if (backendId.current) {
@@ -822,6 +884,14 @@ export function TerminalView({
       )}
 
       {scpOpen && <ScpModal conn={liveConn} onClose={() => setScpOpen(false)} />}
+
+      {pastePending !== null && (
+        <PasteConfirm
+          lines={splitPasteLines(pastePending)}
+          onConfirm={confirmPaste}
+          onCancel={cancelPaste}
+        />
+      )}
     </div>
   );
 }

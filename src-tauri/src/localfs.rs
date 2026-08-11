@@ -28,6 +28,8 @@ pub fn local_fs_list(path: String) -> Result<Vec<RemoteFile>, String> {
                         is_dir: true,
                         size: 0,
                         modified: None,
+                        owner: None,
+                        group: None,
                     });
                 }
             }
@@ -52,6 +54,9 @@ pub fn local_fs_list(path: String) -> Result<Vec<RemoteFile>, String> {
             is_dir: meta.is_dir(),
             size: meta.len(),
             modified,
+            // The local pane doesn't show ownership; Windows has no uid to show.
+            owner: None,
+            group: None,
         });
     }
     Ok(out)

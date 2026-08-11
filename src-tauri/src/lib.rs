@@ -7,6 +7,7 @@ mod local;
 mod localfs;
 mod logs;
 mod portable;
+mod progress;
 mod scp;
 mod serial;
 mod sftp;
@@ -56,6 +57,12 @@ pub struct RemoteFile {
     pub is_dir: bool,
     pub size: u64,
     pub modified: Option<i64>,
+    /// Owning user and its group, when the server reports them: SFTP sends
+    /// numeric ids (resolved against the host's `/etc/passwd` where readable),
+    /// FTP carries the names in its `LIST` output. `None` where neither is
+    /// available — Windows SFTP servers, MLSD listings, local files.
+    pub owner: Option<String>,
+    pub group: Option<String>,
 }
 
 /// A directory listing plus the path the server actually resolved it to, so

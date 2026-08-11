@@ -54,7 +54,7 @@
           <a data-download href="https://github.com/fajarmhr/Dshh/releases/latest" style="display:inline-flex;align-items:center;gap:8px;background:#5b8cff;border-radius:8px;padding:13px 24px;font-size:14.5px;font-weight:500;color:#fff;box-shadow:0 8px 24px -8px rgba(91,140,255,0.5);">↓ Download for Windows</a>
           <a href="#dsh-changelog" class="btn-ghost" style="padding:13px 22px;font-size:14.5px;">View changelog</a>
         </div>
-        <div data-live-note style="margin-top:18px;font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.03em;color:#5a6878;">v1.0.0 · portable · win64 · no installer · no admin rights</div>
+        <div data-live-note style="margin-top:18px;font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.03em;color:#5a6878;">v1.1.0 · portable · win64 · no installer · no admin rights</div>
       </div>
 
       <!-- APP MOCKUP -->
@@ -216,11 +216,11 @@
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:20px;margin-top:40px;">
         <div style="border:1px solid #1c2531;border-radius:14px;background:#0d121a;padding:28px;">
           <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;">
-            <span data-latest-ver style="border:1px solid rgba(91,140,255,0.3);border-radius:6px;background:rgba(91,140,255,0.1);padding:2px 9px;font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;color:#5b8cff;">v1.0.0</span>
+            <span data-latest-ver style="border:1px solid rgba(91,140,255,0.3);border-radius:6px;background:rgba(91,140,255,0.1);padding:2px 9px;font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;color:#5b8cff;">v1.1.0</span>
             <span style="border-radius:6px;background:rgba(62,207,142,0.1);padding:2px 9px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#3ecf8e;">latest</span>
             <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#5a6878;">jul 2026</span>
           </div>
-          <div data-latest-title style="margin-top:18px;font-size:21px;font-weight:600;color:#e3eaf3;">Dshh 1.0.0 — portable</div>
+          <div data-latest-title style="margin-top:18px;font-size:21px;font-weight:600;color:#e3eaf3;">Dshh 1.1.0 — portable</div>
           <a data-download href="https://github.com/fajarmhr/Dshh/releases/latest" style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:16px;border:1px solid #1c2531;border-radius:8px;background:#070a0f;padding:12px 14px;font-family:'JetBrains Mono',monospace;font-size:11.5px;color:#7ca4ff;">
             <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">↓ Dshh-portable.zip</span><span style="flex-shrink:0;color:#5a6878;">win64</span>
           </a>
@@ -267,7 +267,17 @@
            below are the static fallback shown when the API is unreachable. -->
       <div data-changelog>
       <div class="clog">
-        <div class="clog-v"><div style="display:flex;align-items:center;gap:8px;"><span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:#5b8cff;">v1.0.1</span><span style="border-radius:5px;background:rgba(62,207,142,0.1);padding:1px 7px;font-family:'JetBrains Mono',monospace;font-size:10px;color:#3ecf8e;">latest</span></div><div class="clog-d">aug 2026</div></div>
+        <div class="clog-v"><div style="display:flex;align-items:center;gap:8px;"><span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:#5b8cff;">v1.1.0</span><span style="border-radius:5px;background:rgba(62,207,142,0.1);padding:1px 7px;font-family:'JetBrains Mono',monospace;font-size:10px;color:#3ecf8e;">latest</span></div><div class="clog-d">aug 2026</div></div>
+        <div class="clog-body"><div class="clog-h">Paste guard, transfer progress, file owners</div>
+          <ul class="clog-ul">
+            <li>Pasting two or more lines now asks first, listing the exact numbered lines that would run — every newline is an Enter to the shell, so a stray copy used to execute commands with no warning. Covers Ctrl+V, Ctrl+Shift+V, Shift+Insert and right-click paste; switch it off in Settings &rsaquo; Terminal</li>
+            <li>Uploads and downloads show a real progress bar with bytes moved, percentage and position in a multi-file batch, in the SFTP/FTP browser and the SCP dialog. Servers that won't report a size get an indeterminate bar rather than a fake percentage</li>
+            <li>The file browser has an owner column. SFTP resolves numeric uids against the server's own /etc/passwd, so you see root and www-data rather than 0 and 33; FTP reads the names straight out of its listing</li>
+          </ul>
+        </div>
+      </div>
+      <div class="clog">
+        <div class="clog-v"><span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:#5b8cff;">v1.0.1</span><div class="clog-d">aug 2026</div></div>
         <div class="clog-body"><div class="clog-h">Right-click copy and paste</div>
           <ul class="clog-ul">
             <li>Right-clicking the terminal now pastes the clipboard. Select text first and the same right-click copies it instead — so select, right-click, right-click again copies a line and pastes it back without touching the keyboard</li>

@@ -90,6 +90,15 @@ export function buildFilter(query: string): ((haystack: string) => boolean) | nu
   return (h) => re.test(h.toLowerCase());
 }
 
+/**
+ * The lines a paste would send, as the shell will see them: CR/CRLF normalised,
+ * and one trailing newline dropped — that one submits the last line rather than
+ * starting another, so counting it would overstate what runs.
+ */
+export function splitPasteLines(text: string): string[] {
+  return text.replace(/\r\n?/g, "\n").replace(/\n$/, "").split("\n");
+}
+
 /** Short local date-time for file listings, e.g. "2026-07-03 14:22". */
 export function formatDate(epochSeconds: number | null): string {
   if (!epochSeconds) return "—";

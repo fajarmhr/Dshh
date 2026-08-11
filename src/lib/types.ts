@@ -115,6 +115,13 @@ export interface RemoteFile {
   isDir: boolean;
   size: number;
   modified: number | null; // epoch seconds
+  /**
+   * Owning user and group as reported by the server — `root`, `www-data`, or a
+   * bare uid where the name can't be resolved. Absent for local files and for
+   * servers that report no ownership at all (Windows SFTP, MLSD-only FTP).
+   */
+  owner?: string | null;
+  group?: string | null;
 }
 
 /** A listing plus the path the server resolved it to ("." → "/home/you"). */

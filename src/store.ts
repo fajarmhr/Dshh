@@ -53,6 +53,8 @@ export interface Settings {
   cursorStyle: CursorStyle;
   cursorBlink: boolean;
   scrollback: number;
+  /** Show the paste preview before sending clipboard text with 2+ lines. */
+  pasteWarnMultiline: boolean;
   highlightEnabled: boolean;
   highlightRules: HighlightRule[];
   /** Highest default-rule set merged into highlightRules (see loadSettings). */
@@ -104,6 +106,7 @@ const DEFAULT_SETTINGS: Settings = {
   cursorStyle: "block",
   cursorBlink: true,
   scrollback: 10000,
+  pasteWarnMultiline: true,
   highlightEnabled: true,
   highlightRules: DEFAULT_HIGHLIGHT_RULES,
   rulesVersion: RULES_VERSION,

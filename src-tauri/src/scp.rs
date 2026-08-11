@@ -1,3 +1,4 @@
+use crate::progress::{Progress, Reporter};
 use crate::ssh::connect_and_auth;
 use crate::Connection;
 use russh::client::Msg;
@@ -5,6 +6,7 @@ use russh::{Channel, ChannelMsg};
 use std::collections::VecDeque;
 use std::io::{Read, Write};
 use std::path::Path;
+use tauri::ipc::Channel as IpcChannel;
 
 /// SCP file transfer over the existing `russh` SSH channel — no libssh2, no
 /// extra native deps, so the single portable `.exe` stays intact. We open an
@@ -115,7 +117,12 @@ fn quote(s: &str) -> String {
 
 /// Upload one local file to `remote` (a remote file path or existing directory).
 #[tauri::command]
-pub async fn scp_upload(conn: Connection, local: String, remote: String) -> Result<(), String> {
+pub async fn scp_upload(
+    conn: Connection,
+    local: String,
+    remote: String,
+    on_progress: IpcChannel<Progress>,
+) -> Result<(), String> {
     let meta = std::fs::metadata(&local).map_err(|e| format!("Cannot read local file: {e}"))?;
     if meta.is_dir() {
         return Err("Recursive directory upload is not supported yet".into());
@@ -140,6 +147,7 @@ pub async fn scp_upload(conn: Connection, local: String, remote: String) -> Resu
     let mut f = std::fs::File::open(&local).map_err(|e| format!("Cannot open local file: {e}"))?;
     let mut buf = [0u8; 32768];
     let mut sent: u64 = 0;
+    let mut reporter = Reporter::new(on_progress, size);
     while sent < size {
         let n = f.read(&mut buf).map_err(|e| e.to_string())?;
         if n == 0 {
@@ -147,7 +155,9 @@ pub async fn scp_upload(conn: Connection, local: String, remote: String) -> Resu
         }
         io.write_all(&buf[..n]).await?;
         sent += n as u64;
+        reporter.add(n as u64);
     }
+    reporter.finish();
     io.ack().await?;
     io.read_reply().await?;
 
@@ -157,7 +167,12 @@ pub async fn scp_upload(conn: Connection, local: String, remote: String) -> Resu
 
 /// Download one remote file `remote` to the local path `local`.
 #[tauri::command]
-pub async fn scp_download(conn: Connection, remote: String, local: String) -> Result<(), String> {
+pub async fn scp_download(
+    conn: Connection,
+    remote: String,
+    local: String,
+    on_progress: IpcChannel<Progress>,
+) -> Result<(), String> {
     let handle = connect_and_auth(&conn).await?;
     let channel = handle.channel_open_session().await.map_err(|e| e.to_string())?;
     let cmd = format!("scp -f {}", quote(&remote));
@@ -188,6 +203,9 @@ pub async fn scp_download(conn: Connection, remote: String, local: String) -> Re
                 let mut out = std::fs::File::create(&local)
                     .map_err(|e| format!("Cannot create local file: {e}"))?;
                 let mut remaining = size;
+                // Cloned rather than moved: the header loop can run again
+                // before reaching this branch (a `T` timestamp line first).
+                let mut reporter = Reporter::new(on_progress.clone(), size);
                 while remaining > 0 {
                     io.pump().await?;
                     if io.inbuf.is_empty() && io.eof {
@@ -197,8 +215,10 @@ pub async fn scp_download(conn: Connection, remote: String, local: String) -> Re
                     let chunk: Vec<u8> = io.inbuf.drain(..take).collect();
                     out.write_all(&chunk).map_err(|e| e.to_string())?;
                     remaining -= take as u64;
+                    reporter.add(take as u64);
                 }
                 out.flush().map_err(|e| e.to_string())?;
+                reporter.finish();
                 io.read_reply().await?;
                 io.ack().await?;
                 let _ = io.channel.eof().await;
@@ -222,6 +242,11 @@ pub async fn scp_download(conn: Connection, remote: String, local: String) -> Re
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The live tests don't watch progress; the commands still need a channel.
+    fn no_progress() -> IpcChannel<Progress> {
+        IpcChannel::new(|_| Ok(()))
+    }
 
     /// Live round-trip against a local sshd (see docs: disposable container on
     /// port 2222, user test/test123). Run with:
@@ -264,6 +289,7 @@ mod tests {
             test_conn(),
             local.to_string_lossy().into_owned(),
             "/home/test/up.bin".into(),
+            no_progress(),
         )
         .await
         .expect("upload failed");
@@ -274,6 +300,7 @@ mod tests {
             test_conn(),
             "/home/test/up.bin".into(),
             back.to_string_lossy().into_owned(),
+            no_progress(),
         )
         .await
         .expect("download failed");
@@ -298,13 +325,13 @@ mod tests {
         let dir = std::env::temp_dir();
         let local = dir.join("dshh_jump_up.bin");
         std::fs::write(&local, b"via-jump").unwrap();
-        scp_upload(conn.clone(), local.to_string_lossy().into_owned(), "/home/test/jump.bin".into())
+        scp_upload(conn.clone(), local.to_string_lossy().into_owned(), "/home/test/jump.bin".into(), no_progress())
             .await
             .expect("upload via jump failed");
 
         let back = dir.join("dshh_jump_down.bin");
         let _ = std::fs::remove_file(&back);
-        scp_download(conn, "/home/test/jump.bin".into(), back.to_string_lossy().into_owned())
+        scp_download(conn, "/home/test/jump.bin".into(), back.to_string_lossy().into_owned(), no_progress())
             .await
             .expect("download via jump failed");
         assert_eq!(std::fs::read(&back).unwrap(), b"via-jump");
@@ -319,6 +346,7 @@ mod tests {
             test_conn(),
             "/home/test/does-not-exist.bin".into(),
             back.to_string_lossy().into_owned(),
+            no_progress(),
         )
         .await
         .expect_err("expected an error for a missing remote file");
@@ -340,12 +368,12 @@ mod tests {
         let dir = std::env::temp_dir();
         let local = dir.join("dshh_tilde_src.bin");
         std::fs::write(&local, b"tilde-down-test").unwrap();
-        scp_upload(test_conn(), local.to_string_lossy().into_owned(), "~/tilde-down.bin".into())
+        scp_upload(test_conn(), local.to_string_lossy().into_owned(), "~/tilde-down.bin".into(), no_progress())
             .await
             .expect("seed upload failed");
         let back = dir.join("dshh_tilde_down.bin");
         let _ = std::fs::remove_file(&back);
-        scp_download(test_conn(), "~/tilde-down.bin".into(), back.to_string_lossy().into_owned())
+        scp_download(test_conn(), "~/tilde-down.bin".into(), back.to_string_lossy().into_owned(), no_progress())
             .await
             .expect("tilde download failed");
         assert_eq!(std::fs::read(&back).unwrap(), b"tilde-down-test");
@@ -357,7 +385,13 @@ mod tests {
         let dir = std::env::temp_dir();
         let local = dir.join("dshh_tilde.bin");
         std::fs::write(&local, b"tilde-test").unwrap();
-        let r = scp_upload(test_conn(), local.to_string_lossy().into_owned(), "~/tilde.bin".into()).await;
+        let r = scp_upload(
+            test_conn(),
+            local.to_string_lossy().into_owned(),
+            "~/tilde.bin".into(),
+            no_progress(),
+        )
+        .await;
         println!("tilde upload result: {r:?}");
         r.expect("tilde upload failed");
     }
@@ -368,7 +402,13 @@ mod tests {
         let dir = std::env::temp_dir();
         let local = dir.join("dshh_dirtarget.bin");
         std::fs::write(&local, b"dir-test").unwrap();
-        let r = scp_upload(test_conn(), local.to_string_lossy().into_owned(), "/home/test/".into()).await;
+        let r = scp_upload(
+            test_conn(),
+            local.to_string_lossy().into_owned(),
+            "/home/test/".into(),
+            no_progress(),
+        )
+        .await;
         println!("dir-target upload result: {r:?}");
         r.expect("dir-target upload failed");
     }
@@ -379,7 +419,13 @@ mod tests {
         let dir = std::env::temp_dir();
         let local = dir.join("dshh_apos.bin");
         std::fs::write(&local, b"apos-test").unwrap();
-        let r = scp_upload(test_conn(), local.to_string_lossy().into_owned(), "/home/test/it's.bin".into()).await;
+        let r = scp_upload(
+            test_conn(),
+            local.to_string_lossy().into_owned(),
+            "/home/test/it's.bin".into(),
+            no_progress(),
+        )
+        .await;
         println!("apostrophe upload result: {r:?}");
         r.expect("apostrophe upload failed");
     }

@@ -42,7 +42,8 @@ browser.
   UAC and opens in its own window (an elevated shell can't share this app's console).
 - **Real terminal** — xterm.js with buffer search (`Ctrl+F`), keyword highlighting,
   session recording, and save-to-file. Right-click copies the selection, or pastes when
-  nothing is selected. Terminal size stays in lock-step with the remote
+  nothing is selected. Pasting **two or more lines asks first** and lists them, since every
+  newline is an Enter to the shell. Terminal size stays in lock-step with the remote
   PTY, so cursor editing (`←/→`, history) never smears. An optional **status bar**
   carries the target, time connected, grid size and encoding.
 - **Windows 11 backdrop (optional)** — Mica or acrylic behind the app chrome,
@@ -50,7 +51,9 @@ browser.
   desktop is unreadable.
 - **SFTP file browser** with drag & drop upload from Explorer and remote file
   editing — double-click a file to open it in your local editor; every save
-  uploads back automatically. Plus saved-session sync.
+  uploads back automatically. Listings show each file's **owner** (uids resolved
+  against the server's own `/etc/passwd`), and every transfer draws a **progress
+  bar** with bytes moved and percentage. Plus saved-session sync.
 - **Port forwarding, all three directions** — local (`ssh -L`), remote
   (`ssh -R`, the server listens for you) and dynamic (`ssh -D`, a built-in
   SOCKS5 proxy). Each forward runs on its own SSH connection and shows live

@@ -12,6 +12,7 @@ import {
   Pencil,
 } from "lucide-react";
 import { LocalPane } from "./LocalPane";
+import { TransferBar, type Transfer } from "./TransferBar";
 import { FileTypeIcon } from "../lib/fileIcons";
 import { useStore } from "../store";
 import {
@@ -45,6 +46,8 @@ export function FileBrowser({
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string>("");
   const [dragOver, setDragOver] = useState(false);
+  /** The transfer currently in flight, driving the progress bar. */
+  const [transfer, setTransfer] = useState<Transfer | null>(null);
   const [showLocal, setShowLocal] = useState(false);
   // Editable address bar. Kept as a draft so a half-typed path never becomes
   // the real cwd; navigating elsewhere (click, Up, refresh) resyncs it.
@@ -144,14 +147,17 @@ export function FileBrowser({
     if (!local) return;
     setBusy(true);
     setMsg(`Downloading ${f.name}…`);
+    const onProgress = (p: { done: number; total: number }) =>
+      setTransfer({ name: f.name, dir: "down", ...p });
     try {
       isSftp
-        ? await sftpDownload(backendId, f.path, local)
-        : await ftpDownload(backendId, f.path, local);
+        ? await sftpDownload(backendId, f.path, local, onProgress)
+        : await ftpDownload(backendId, f.path, local, onProgress);
       setMsg(`Downloaded ${f.name}`);
     } catch (e) {
       setMsg(String(e));
     } finally {
+      setTransfer(null);
       setBusy(false);
     }
   };
@@ -163,19 +169,28 @@ export function FileBrowser({
       setBusy(true);
       let ok = 0;
       let lastErr = "";
-      for (const p of paths) {
+      for (const [i, p] of paths.entries()) {
         // Windows paths use "\", so split on both separators — otherwise the
         // whole local path gets baked into the remote file name.
         const name = p.split(/[\\/]/).pop()!;
         const remote = (dir.endsWith("/") ? dir : dir + "/") + name;
         setMsg(`Uploading ${name}…`);
+        // A dropped folder of files is one batch: the bar names the file and
+        // its place in the queue rather than flickering with no context.
+        const batch: [number, number] | undefined =
+          paths.length > 1 ? [i + 1, paths.length] : undefined;
+        const onProgress = (prog: { done: number; total: number }) =>
+          setTransfer({ name, dir: "up", batch, ...prog });
         try {
-          sftp ? await sftpUpload(id, p, remote) : await ftpUpload(id, p, remote);
+          sftp
+            ? await sftpUpload(id, p, remote, onProgress)
+            : await ftpUpload(id, p, remote, onProgress);
           ok++;
         } catch (e) {
           lastErr = `${name}: ${String(e)}`;
         }
       }
+      setTransfer(null);
       setMsg(
         lastErr
           ? `Uploaded ${ok}/${paths.length} — ${lastErr}`
@@ -202,9 +217,15 @@ export function FileBrowser({
       const sep = /^[A-Za-z]:/.test(dir) || dir.includes("\\") ? "\\" : "/";
       const local =
         dir.endsWith("\\") || dir.endsWith("/") ? dir + file.name : dir + sep + file.name;
-      sftp
-        ? await sftpDownload(id, file.path, local)
-        : await ftpDownload(id, file.path, local);
+      const onProgress = (p: { done: number; total: number }) =>
+        setTransfer({ name: file.name, dir: "down", ...p });
+      try {
+        sftp
+          ? await sftpDownload(id, file.path, local, onProgress)
+          : await ftpDownload(id, file.path, local, onProgress);
+      } finally {
+        setTransfer(null);
+      }
     },
     []
   );
@@ -339,6 +360,7 @@ export function FileBrowser({
             <thead className="sticky top-0 bg-bg-panel">
               <tr className="micro-label">
                 <th className="px-3 py-2 text-left font-medium">name</th>
+                <th className="px-3 py-2 text-left font-medium">owner</th>
                 <th className="px-3 py-2 text-right font-medium">size</th>
                 <th className="px-3 py-2 text-right font-medium">modified</th>
                 <th className="w-10"></th>
@@ -368,6 +390,12 @@ export function FileBrowser({
                       )}
                       <span className="truncate text-ink-hi">{f.name}</span>
                     </div>
+                  </td>
+                  <td
+                    className="px-3 py-1.5 font-mono text-[11px] text-ink-mid"
+                    title={f.group ? `${f.owner ?? "?"}:${f.group}` : undefined}
+                  >
+                    <span className="truncate">{f.owner || "—"}</span>
                   </td>
                   <td className="px-3 py-1.5 text-right font-mono text-[11px] text-ink-mid">
                     {f.isDir ? "—" : formatBytes(f.size)}
@@ -403,6 +431,12 @@ export function FileBrowser({
           </table>
         )}
       </div>
+
+      {transfer && (
+        <div className="shrink-0 border-t border-edge bg-bg-panel">
+          <TransferBar transfer={transfer} />
+        </div>
+      )}
 
       <div className="flex h-7 shrink-0 items-center border-t border-edge bg-bg-panel px-3">
         <span className="truncate font-mono text-[10.5px] text-ink-dim">
