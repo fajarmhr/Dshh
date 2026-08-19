@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { ChevronDown, ChevronRight, Play, Trash2, X } from "lucide-react";
+import { ChevronDown, ChevronRight, GripVertical, Play, Trash2, X } from "lucide-react";
 import { useStore } from "../store";
 import { sendMacro } from "../lib/terminalRegistry";
+import { useDragReorder } from "../lib/useDragReorder";
 import { cn, overlayDismiss } from "../lib/utils";
 
 /**
@@ -22,7 +23,9 @@ export function MacrosModal({
   const macros = useStore((s) => s.macros);
   const updateMacro = useStore((s) => s.updateMacro);
   const removeMacro = useStore((s) => s.removeMacro);
+  const reorderMacros = useStore((s) => s.reorderMacros);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const drag = useDragReorder(reorderMacros);
 
   return (
     <div className="modal-overlay" {...overlayDismiss(onClose)}>
@@ -39,7 +42,10 @@ export function MacrosModal({
           </button>
         </div>
 
-        <div className="max-h-[60vh] space-y-2 overflow-y-auto px-5 py-4">
+        <div
+          className="max-h-[60vh] space-y-2 overflow-y-auto px-5 py-4"
+          {...drag.listProps}
+        >
           {macros.length === 0 && (
             <div className="rounded-lg border border-dashed border-edge-bright px-4 py-5 font-mono text-[11px] leading-relaxed text-ink-dim">
               no macros yet — press{" "}
@@ -49,14 +55,28 @@ export function MacrosModal({
             </div>
           )}
 
-          {macros.map((m) => {
+          {macros.map((m, i) => {
             const open = expanded === m.id;
             return (
               <div
                 key={m.id}
-                className="rounded-lg border border-edge bg-bg-elev px-3 py-2"
+                {...drag.rowProps(i)}
+                className={cn(
+                  "rounded-lg border border-edge bg-bg-elev px-3 py-2 transition",
+                  drag.dragIndex === i && "opacity-40",
+                  drag.overIndex === i &&
+                    drag.dragIndex !== i &&
+                    "border-accent/60 bg-accent/5"
+                )}
               >
                 <div className="flex items-center gap-2">
+                  <button
+                    {...drag.gripProps(i)}
+                    className="shrink-0 cursor-grab rounded p-0.5 text-ink-dim transition hover:text-ink-hi active:cursor-grabbing"
+                    title="Drag to reorder · ↑/↓ to move"
+                  >
+                    <GripVertical size={14} />
+                  </button>
                   <button
                     onClick={() => setExpanded(open ? null : m.id)}
                     className="shrink-0 rounded p-0.5 text-ink-dim transition hover:text-ink-hi"
@@ -100,7 +120,7 @@ export function MacrosModal({
                 </div>
 
                 {open && (
-                  <ol className="mt-2 space-y-0.5 border-t border-edge pl-6 pt-2 font-mono text-[11.5px] text-ink-mid">
+                  <ol className="mt-2 space-y-0.5 border-t border-edge pl-11 pt-2 font-mono text-[11.5px] text-ink-mid">
                     {m.steps.map((step, i) => (
                       <li key={i} className="flex gap-2">
                         <span className="w-4 shrink-0 text-right text-ink-dim">
@@ -118,7 +138,7 @@ export function MacrosModal({
 
         <div className="flex items-center justify-between border-t border-edge px-5 py-3">
           <span className="font-mono text-[10px] text-ink-dim">
-            steps are paced 250 ms apart so the shell keeps up
+            drag the grip to reorder chips · steps are paced 250 ms apart
           </span>
           <button onClick={onClose} className="btn-primary">
             Done

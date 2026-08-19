@@ -1,16 +1,19 @@
 import { useState } from "react";
-import { Plus, Trash2, X } from "lucide-react";
+import { GripVertical, Plus, Trash2, X } from "lucide-react";
 import { useStore } from "../store";
-import { overlayDismiss } from "../lib/utils";
+import { useDragReorder } from "../lib/useDragReorder";
+import { cn, overlayDismiss } from "../lib/utils";
 
 export function QuickCommandsModal({ onClose }: { onClose: () => void }) {
   const quickCommands = useStore((s) => s.quickCommands);
   const addQuickCommand = useStore((s) => s.addQuickCommand);
   const updateQuickCommand = useStore((s) => s.updateQuickCommand);
   const removeQuickCommand = useStore((s) => s.removeQuickCommand);
+  const reorderQuickCommands = useStore((s) => s.reorderQuickCommands);
 
   const [label, setLabel] = useState("");
   const [command, setCommand] = useState("");
+  const drag = useDragReorder(reorderQuickCommands);
 
   const add = () => {
     if (!command.trim()) return;
@@ -38,7 +41,10 @@ export function QuickCommandsModal({ onClose }: { onClose: () => void }) {
           </button>
         </div>
 
-        <div className="max-h-[60vh] space-y-2 overflow-y-auto px-5 py-4">
+        <div
+          className="max-h-[60vh] space-y-2 overflow-y-auto px-5 py-4"
+          {...drag.listProps}
+        >
           {quickCommands.length === 0 && (
             <div className="rounded-lg border border-dashed border-edge-bright px-4 py-5 font-mono text-[11px] leading-relaxed text-ink-dim">
               no quick commands yet — each one becomes a chip above the compose
@@ -46,8 +52,25 @@ export function QuickCommandsModal({ onClose }: { onClose: () => void }) {
             </div>
           )}
 
-          {quickCommands.map((q) => (
-            <div key={q.id} className="flex items-center gap-2">
+          {quickCommands.map((q, i) => (
+            <div
+              key={q.id}
+              {...drag.rowProps(i)}
+              className={cn(
+                "flex items-center gap-2 rounded-md border border-transparent transition",
+                drag.dragIndex === i && "opacity-40",
+                drag.overIndex === i &&
+                  drag.dragIndex !== i &&
+                  "border-accent/60 bg-accent/5"
+              )}
+            >
+              <button
+                {...drag.gripProps(i)}
+                className="shrink-0 cursor-grab rounded p-0.5 text-ink-dim transition hover:text-ink-hi active:cursor-grabbing"
+                title="Drag to reorder · ↑/↓ to move"
+              >
+                <GripVertical size={14} />
+              </button>
               <input
                 className="field-input w-36 shrink-0"
                 value={q.label}
@@ -73,6 +96,9 @@ export function QuickCommandsModal({ onClose }: { onClose: () => void }) {
           ))}
 
           <div className="flex items-center gap-2 border-t border-edge pt-3">
+            {/* Keeps the new row's fields lined up with the rows above, which
+                give up this much width to their grip. */}
+            <span aria-hidden className="w-[22px] shrink-0" />
             <input
               className="field-input w-36 shrink-0"
               value={label}
@@ -100,7 +126,7 @@ export function QuickCommandsModal({ onClose }: { onClose: () => void }) {
 
         <div className="flex items-center justify-between border-t border-edge px-5 py-3">
           <span className="font-mono text-[10px] text-ink-dim">
-            a filled-in row is saved when you press Done
+            drag the grip to reorder chips · a filled-in row is saved on Done
           </span>
           <button onClick={close} className="btn-primary">
             Done

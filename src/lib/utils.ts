@@ -106,3 +106,17 @@ export function formatDate(epochSeconds: number | null): string {
   const p = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
+
+/**
+ * Move one item of a list to another index, returning a new array. Indices
+ * outside the list — and a move onto its own slot — return the original array,
+ * so callers can skip the write when nothing actually changed.
+ */
+export function moveItem<T>(list: T[], from: number, to: number): T[] {
+  if (from === to) return list;
+  if (from < 0 || from >= list.length || to < 0 || to >= list.length) return list;
+  const next = list.slice();
+  const [item] = next.splice(from, 1);
+  next.splice(to, 0, item);
+  return next;
+}

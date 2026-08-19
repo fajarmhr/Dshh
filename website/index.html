@@ -267,7 +267,17 @@
            below are the static fallback shown when the API is unreachable. -->
       <div data-changelog>
       <div class="clog">
-        <div class="clog-v"><div style="display:flex;align-items:center;gap:8px;"><span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:#5b8cff;">v1.1.0</span><span style="border-radius:5px;background:rgba(62,207,142,0.1);padding:1px 7px;font-family:'JetBrains Mono',monospace;font-size:10px;color:#3ecf8e;">latest</span></div><div class="clog-d">aug 2026</div></div>
+        <div class="clog-v"><div style="display:flex;align-items:center;gap:8px;"><span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:#5b8cff;">v1.1.1</span><span style="border-radius:5px;background:rgba(62,207,142,0.1);padding:1px 7px;font-family:'JetBrains Mono',monospace;font-size:10px;color:#3ecf8e;">latest</span></div><div class="clog-d">aug 2026</div></div>
+        <div class="clog-body"><div class="clog-h">Reorder quick commands and macros</div>
+          <ul class="clog-ul">
+            <li>Quick commands can be reordered — drag a row by its grip in the manage dialog and the chips above the compose bar follow that order, so the ones you actually use sit where your eye lands</li>
+            <li>Macros get the same handle, reordered the same way</li>
+            <li>Both lists also move with the keyboard: focus a grip and press the up or down arrow, which beats dragging inside a scrolling dialog</li>
+          </ul>
+        </div>
+      </div>
+      <div class="clog">
+        <div class="clog-v"><span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:#5b8cff;">v1.1.0</span><div class="clog-d">aug 2026</div></div>
         <div class="clog-body"><div class="clog-h">Paste guard, transfer progress, file owners</div>
           <ul class="clog-ul">
             <li>Pasting two or more lines now asks first, listing the exact numbered lines that would run — every newline is an Enter to the shell, so a stray copy used to execute commands with no warning. Covers Ctrl+V, Ctrl+Shift+V, Shift+Insert and right-click paste; switch it off in Settings &rsaquo; Terminal</li>

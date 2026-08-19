@@ -11,6 +11,7 @@ import {
   setWindowEffect,
 } from "./lib/api";
 import { DEFAULT_THEME_ID } from "./lib/themes";
+import { moveItem } from "./lib/utils";
 import type {
   Connection,
   CursorStyle,
@@ -261,6 +262,8 @@ interface AppState {
   addQuickCommand: (label: string, command: string) => void;
   updateQuickCommand: (id: string, patch: Partial<Omit<QuickCommand, "id">>) => void;
   removeQuickCommand: (id: string) => void;
+  /** Move a quick command; the dock renders its chips in this order. */
+  reorderQuickCommands: (from: number, to: number) => void;
 
   /** Begin capturing commands typed in `sessionId` into a new macro. */
   startRecording: (sessionId: string) => void;
@@ -272,6 +275,8 @@ interface AppState {
   cancelRecording: () => void;
   updateMacro: (id: string, patch: Partial<Omit<Macro, "id">>) => void;
   removeMacro: (id: string) => void;
+  /** Move a macro; the dock renders its chips in this order. */
+  reorderMacros: (from: number, to: number) => void;
 
   setTunnelActive: (defId: string, backendId: string | null) => void;
 }
@@ -450,6 +455,14 @@ export const useStore = create<AppState>((set, get) => ({
     set({ quickCommands });
   },
 
+  reorderQuickCommands: (from, to) => {
+    const current = get().quickCommands;
+    const quickCommands = moveItem(current, from, to);
+    if (quickCommands === current) return;
+    persistQuickCommands(quickCommands);
+    set({ quickCommands });
+  },
+
   startRecording: (sessionId) =>
     set({ recordingMacroFor: sessionId, recordingSteps: [] }),
 
@@ -483,6 +496,14 @@ export const useStore = create<AppState>((set, get) => ({
 
   removeMacro: (id) => {
     const macros = get().macros.filter((m) => m.id !== id);
+    persistMacros(macros);
+    set({ macros });
+  },
+
+  reorderMacros: (from, to) => {
+    const current = get().macros;
+    const macros = moveItem(current, from, to);
+    if (macros === current) return;
     persistMacros(macros);
     set({ macros });
   },

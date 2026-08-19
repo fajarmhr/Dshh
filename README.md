@@ -33,6 +33,9 @@ browser.
 - **Macros** — hit **Macro** on a terminal to record the commands you type, name
   the result, and replay it into any session from a chip in the bottom dock.
   Steps are paced so the shell keeps up.
+- **Reorderable chips** — quick commands and macros both list in the order their
+  chips appear. Drag a row by its grip in the manage dialog to move it, or focus
+  the grip and press ↑/↓.
 - **SSH agent auth** — pick **agent** as the auth method and the key never
   enters this process. Tries the Windows OpenSSH agent service first, then
   Pageant; RSA keys negotiate SHA-2 via `server-sig-algs`.
