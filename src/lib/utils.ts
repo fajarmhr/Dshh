@@ -120,3 +120,33 @@ export function moveItem<T>(list: T[], from: number, to: number): T[] {
   next.splice(to, 0, item);
   return next;
 }
+
+/**
+ * Does this connect error look like the server rejecting our credentials,
+ * rather than the network or the host being wrong?
+ *
+ * Deciding this from a message is unlovely, but the transports don't carry a
+ * typed error: russh reports "Authentication failed", suppaftp hands back the
+ * server's own 530 line, and either way the fix is the same — ask for the
+ * password again. Matching too widely is the safe direction: the worst case is
+ * a prompt the user dismisses, where matching too narrowly leaves them with a
+ * dead tab and no way to correct a typo.
+ */
+export function isAuthFailure(message: string): boolean {
+  return [
+    /authentication failed/i,
+    /auth error/i,
+    /permission denied/i,
+    /access denied/i,
+    /login( |_)?(incorrect|failed|authentication failed)/i,
+    /incorrect password/i,
+    /not logged in/i,
+    /\b530\b/,
+  ].some((re) => re.test(message));
+}
+
+/** Wall clock for the terminal status bar, e.g. "20:36". */
+export function formatClock(d: Date = new Date()): string {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${p(d.getHours())}:${p(d.getMinutes())}`;
+}

@@ -430,6 +430,56 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                   </span>
                 </label>
 
+                <label className="flex cursor-pointer items-start gap-2.5 rounded-md px-1 py-2">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    checked={settings.colorStatusBar}
+                    disabled={!settings.statusBar}
+                    onChange={(e) => setSettings({ colorStatusBar: e.target.checked })}
+                  />
+                  <span className="text-sm text-ink-hi">
+                    Colour the status bar
+                    <span className="mt-0.5 block text-[11px] leading-relaxed text-ink-dim">
+                      Draws the bar as MobaXterm-style segments — green when connected,
+                      red on error — and adds a clock. Off leaves the plain dim row.
+                    </span>
+                  </span>
+                </label>
+
+                <label className="flex cursor-pointer items-start gap-2.5 rounded-md px-1 py-2">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    checked={settings.tintByConnection}
+                    onChange={(e) => setSettings({ tintByConnection: e.target.checked })}
+                  />
+                  <span className="text-sm text-ink-hi">
+                    Tint session chrome with the connection colour
+                    <span className="mt-0.5 block text-[11px] leading-relaxed text-ink-dim">
+                      The accent picked on a connection also colours that session's
+                      toolbar and status bar, so prod doesn't look like staging.
+                    </span>
+                  </span>
+                </label>
+
+                <label className="flex cursor-pointer items-start gap-2.5 rounded-md px-1 py-2">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    checked={settings.connectBanner}
+                    onChange={(e) => setSettings({ connectBanner: e.target.checked })}
+                  />
+                  <span className="text-sm text-ink-hi">
+                    Print a connect banner in the terminal
+                    <span className="mt-0.5 block text-[11px] leading-relaxed text-ink-dim">
+                      A coloured box on connect with the target, port, auth method and
+                      jump host — MobaXterm's login header. It scrolls away with the
+                      session and lands in the log.
+                    </span>
+                  </span>
+                </label>
+
                 <div className="mt-2 px-1">
                   <label className="field-label">Window backdrop</label>
                   <div className="flex gap-1.5">

@@ -12,6 +12,7 @@ import {
   Pencil,
 } from "lucide-react";
 import { LocalPane } from "./LocalPane";
+import { PasswordPrompt } from "./PasswordPrompt";
 import { TransferBar, type Transfer } from "./TransferBar";
 import { FileTypeIcon } from "../lib/fileIcons";
 import { useStore } from "../store";
@@ -29,7 +30,7 @@ import {
   editStart,
 } from "../lib/api";
 import type { Connection, RemoteFile, Session } from "../lib/types";
-import { formatBytes, formatDate } from "../lib/utils";
+import { formatBytes, formatDate, isAuthFailure } from "../lib/utils";
 
 export function FileBrowser({
   session,
@@ -52,6 +53,13 @@ export function FileBrowser({
   // Editable address bar. Kept as a draft so a half-typed path never becomes
   // the real cwd; navigating elsewhere (click, Up, refresh) resyncs it.
   const [pathDraft, setPathDraft] = useState(cwd);
+  /** Server rejected our saved credential; holds the message to show. */
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [authBusy, setAuthBusy] = useState(false);
+  /** True once the pane is unmounting, so late handshakes clean up after themselves. */
+  const disposedRef = useRef(false);
+  /** Live backend handle, read by cleanup — a retry replaces it mid-life. */
+  const backendRef = useRef<string | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const remoteRef = useRef<HTMLDivElement>(null);
   // Latest values for the long-lived drag-drop subscription.
@@ -78,28 +86,65 @@ export function FileBrowser({
     [isSftp]
   );
 
-  useEffect(() => {
-    let disposed = false;
-    let localId: string | null = null;
-    (async () => {
-      try {
-        const id = isSftp ? await sftpConnect(conn) : await ftpConnect(conn);
-        if (disposed) return;
-        localId = id;
-        setBackendId(id);
-        setStatus(session.id, "connected");
-        await list(id, isSftp ? "." : "/");
-      } catch (e) {
-        setStatus(session.id, "error", String(e));
-        setMsg(String(e));
+  /**
+   * The credential a rejected connection could be retried with. FTP only ever
+   * authenticates with a password; SFTP follows the connection's own method,
+   * and agent auth has nothing to type.
+   */
+  const retryField: "password" | "passphrase" | null = !isSftp
+    ? "password"
+    : conn.authMethod === "agent"
+      ? null
+      : conn.authMethod === "key"
+        ? "passphrase"
+        : "password";
+
+  /**
+   * Connect the browser pane. `secret` overrides the saved credential for this
+   * attempt only, and is written back to the connection just once the server
+   * has accepted it.
+   */
+  const openConnection = async (secret?: { value: string; remember: boolean }) => {
+    const attempt: Connection =
+      secret && retryField ? { ...conn, [retryField]: secret.value } : conn;
+    try {
+      const id = isSftp ? await sftpConnect(attempt) : await ftpConnect(attempt);
+      if (disposedRef.current) {
+        // Pane closed mid-handshake — hand the backend handle straight back.
+        (isSftp ? sftpDisconnect(id) : ftpDisconnect(id)).catch(() => {});
+        return;
       }
-    })();
+      backendRef.current = id;
+      setBackendId(id);
+      setStatus(session.id, "connected");
+      setAuthError(null);
+      if (
+        secret?.remember &&
+        retryField &&
+        useStore.getState().connections.some((c) => c.id === conn.id)
+      ) {
+        useStore.getState().updateConnection(conn.id, { [retryField]: secret.value });
+      }
+      await list(id, isSftp ? "." : "/");
+    } catch (e) {
+      if (disposedRef.current) return;
+      const message = String(e);
+      setStatus(session.id, "error", message);
+      setMsg(message);
+      if (retryField && isAuthFailure(message)) setAuthError(message);
+    } finally {
+      setAuthBusy(false);
+    }
+  };
+
+  useEffect(() => {
+    disposedRef.current = false;
+    openConnection();
     return () => {
-      disposed = true;
-      if (localId) {
-        isSftp
-          ? sftpDisconnect(localId).catch(() => {})
-          : ftpDisconnect(localId).catch(() => {});
+      disposedRef.current = true;
+      const id = backendRef.current;
+      if (id) {
+        isSftp ? sftpDisconnect(id).catch(() => {}) : ftpDisconnect(id).catch(() => {});
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -444,6 +489,21 @@ export function FileBrowser({
         </span>
       </div>
       </div>
+
+      {authError !== null && retryField && (
+        <PasswordPrompt
+          title="Authentication failed"
+          target={`${conn.username ? `${conn.username}@` : ""}${conn.host}:${conn.port}`}
+          error={authError}
+          kind={retryField}
+          busy={authBusy}
+          onSubmit={(value, remember) => {
+            setAuthBusy(true);
+            openConnection({ value, remember });
+          }}
+          onCancel={() => setAuthError(null)}
+        />
+      )}
     </div>
   );
 }

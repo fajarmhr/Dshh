@@ -10,6 +10,7 @@ import {
   ChevronUp,
   Circle,
   CircleStop,
+  Clock,
   FolderTree,
   ListVideo,
   Network,
@@ -41,6 +42,7 @@ import {
   defaultLogDir,
   clipboardRead,
   clipboardWrite,
+  appVersion,
 } from "../lib/api";
 import {
   broadcastToTerminals,
@@ -49,12 +51,17 @@ import {
 } from "../lib/terminalRegistry";
 import { applyHighlights, compileRules, type CompiledRule } from "../lib/highlight";
 import { resolveTheme } from "../lib/themes";
+import { connectBanner } from "../lib/banner";
 import { PasteConfirm } from "./PasteConfirm";
+import { PasswordPrompt } from "./PasswordPrompt";
 import { TunnelsModal } from "./TunnelsModal";
 import { ScpModal } from "./ScpModal";
 import type { Connection, Session } from "../lib/types";
 import {
+  cn,
+  formatClock,
   formatDuration,
+  isAuthFailure,
   sanitizeFilename,
   splitPasteLines,
   timestamp,
@@ -109,6 +116,11 @@ export function TerminalView({
   /** When the current connection came up, for the status bar's uptime. */
   const [connectedAt, setConnectedAt] = useState<number | null>(null);
   const [uptime, setUptime] = useState("");
+  /** Server rejected our saved credential; holds the message to show. */
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [authBusy, setAuthBusy] = useState(false);
+  /** Wall clock in the status bar, MobaXterm-style. */
+  const [clock, setClock] = useState(() => formatClock());
 
   const recordingMacroFor = useStore((s) => s.recordingMacroFor);
   const recordingSteps = useStore((s) => s.recordingSteps);
@@ -193,6 +205,15 @@ export function TerminalView({
     const timer = setInterval(tick, 1000);
     return () => clearInterval(timer);
   }, [settings.statusBar, connectedAt]);
+
+  // Wall clock in the coloured status bar. Ticks on the minute boundary rather
+  // than every second, since that is all the display resolves.
+  useEffect(() => {
+    if (!settings.statusBar || !settings.colorStatusBar) return;
+    setClock(formatClock());
+    const id = setInterval(() => setClock(formatClock()), 15000);
+    return () => clearInterval(id);
+  }, [settings.statusBar, settings.colorStatusBar]);
 
   // Highlight rules live in a ref so the byte pipeline reads the latest
   // settings without re-connecting.
@@ -345,12 +366,40 @@ export function TerminalView({
     term.focus();
   };
 
-  const connect = async () => {
+  /**
+   * The credential a rejected connection could be retried with, or null when
+   * there is nothing to type: agent auth keeps the key out of this process,
+   * telnet asks in-band, and serial/local don't authenticate at all.
+   */
+  const retryField: "password" | "passphrase" | null = !isSsh
+    ? null
+    : liveConn.authMethod === "agent"
+      ? null
+      : liveConn.authMethod === "key"
+        ? "passphrase"
+        : "password";
+
+  /**
+   * Open the backend connection for this tab.
+   *
+   * `secret` overrides the saved password/passphrase for this attempt only —
+   * that is what lets the retry after an auth failure run without first writing
+   * a credential the server hasn't accepted yet.
+   */
+  const connect = async (secret?: {
+    field: "password" | "passphrase";
+    value: string;
+    /** Write it back to the saved connection once the server accepts it. */
+    remember: boolean;
+  }) => {
     const term = termRef.current;
     const life = lifeRef.current;
     if (!term || backendId.current || connectingRef.current) return;
     connectingRef.current = true;
     setStatus(session.id, "connecting");
+    const attemptConn: Connection = secret
+      ? { ...conn, [secret.field]: secret.value }
+      : conn;
     try {
       term.writeln(
         `\x1b[90m· ${isLocal ? "starting" : "connecting to"} ${conn.name} …\x1b[0m`
@@ -374,7 +423,7 @@ export function TerminalView({
       };
 
       const id = isSsh
-        ? await sshConnect(conn, onData, onClosed)
+        ? await sshConnect(attemptConn, onData, onClosed)
         : isLocal
           ? await localOpen(
               conn.shell ?? "cmd",
@@ -385,7 +434,7 @@ export function TerminalView({
               onClosed
             )
           : isTelnet
-            ? await telnetOpen(conn, onData, onClosed)
+            ? await telnetOpen(attemptConn, onData, onClosed)
             : await serialOpen(conn, onData);
 
       if (life.dead) {
@@ -404,10 +453,29 @@ export function TerminalView({
       backendId.current = id;
       setConnectedAt(Date.now());
       setStatus(session.id, "connected");
+      setAuthError(null);
+
+      // The server accepted it, so now it is worth keeping. Transient
+      // connections (one-off local shells) aren't in the saved list; writing
+      // them back would resurrect a tab the user never saved.
+      if (secret?.remember && useStore.getState().connections.some((c) => c.id === conn.id)) {
+        useStore.getState().updateConnection(conn.id, { [secret.field]: secret.value });
+      }
       registerTerminal(session.id, {
         send: (d) => writeBackend(d),
         focus: () => term.focus(),
       });
+
+      // MobaXterm's login banner: what this tab is attached to, in colour,
+      // written before the remote shell's own greeting arrives.
+      if (useStore.getState().settings.connectBanner) {
+        const version = await appVersion().catch(() => "");
+        if (!life.dead && backendId.current === id) {
+          for (const line of connectBanner(liveConn, session.protocol, version)) {
+            term.writeln(line);
+          }
+        }
+      }
 
       // Fresh backend PTY defaults to 80×24; force the first size push (the
       // reset defeats pushResize's "unchanged" guard on reconnect). No-op for
@@ -441,11 +509,16 @@ export function TerminalView({
       }
     } catch (e) {
       if (!life.dead) {
-        setStatus(session.id, "error", String(e));
-        term.writeln(`\r\n\x1b[31m${String(e)}\x1b[0m`);
+        const message = String(e);
+        setStatus(session.id, "error", message);
+        term.writeln(`\r\n\x1b[31m${message}\x1b[0m`);
+        // A rejected credential is worth asking about rather than leaving a
+        // dead tab: the fix is one field, and the user is looking right at it.
+        if (retryField && isAuthFailure(message)) setAuthError(message);
       }
     } finally {
       connectingRef.current = false;
+      setAuthBusy(false);
     }
   };
 
@@ -645,8 +718,17 @@ export function TerminalView({
   const reconnect = () => {
     const term = termRef.current;
     if (!term || connectingRef.current) return;
+    setAuthError(null);
     term.writeln("");
     connect();
+  };
+
+  /** Retry with the credential just typed into the prompt. */
+  const retryWithSecret = (value: string, remember: boolean) => {
+    if (!retryField) return;
+    setAuthBusy(true);
+    termRef.current?.writeln("");
+    connect({ field: retryField, value, remember });
   };
 
   /** What this session is attached to, as shown in the toolbar and status bar. */
@@ -655,6 +737,19 @@ export function TerminalView({
     : isLocal
       ? `local · ${conn.shell ?? "shell"}`
       : `${conn.username ? conn.username + "@" : ""}${conn.host}:${conn.port}`;
+
+  const colorBar = settings.colorStatusBar;
+  /** The connection's own accent, when tinting is on and one was picked. */
+  const tint = settings.tintByConnection ? liveConn.color : undefined;
+  /** Status segment background, so "error" reads as red without the dot alone. */
+  const segmentTone =
+    session.status === "connected"
+      ? "bg-ok/15 text-ok"
+      : session.status === "connecting"
+        ? "bg-warn/15 text-warn"
+        : session.status === "error"
+          ? "bg-err/15 text-err"
+          : "bg-bg-hover text-ink-dim";
 
   const statusColor =
     session.status === "connected"
@@ -667,9 +762,23 @@ export function TerminalView({
 
   return (
     <div className="relative flex h-full w-full flex-col bg-bg-base effect-base">
-      <div className="flex h-9 shrink-0 items-center gap-2 border-b border-edge bg-bg-panel effect-surface px-2">
+      <div
+        className="flex h-9 shrink-0 items-center gap-2 border-b border-edge bg-bg-panel effect-surface px-2"
+        // The connection's accent runs down the left edge and under the bar, so
+        // a glance at the chrome answers "which host is this?".
+        style={
+          tint
+            ? { borderBottomColor: `${tint}59`, boxShadow: `inset 3px 0 0 ${tint}` }
+            : undefined
+        }
+      >
         <span className={`ml-1 h-1.5 w-1.5 shrink-0 rounded-full ${statusColor}`} />
-        <span className="shrink-0 font-mono text-[10.5px] text-ink-dim">{target}</span>
+        <span
+          className="shrink-0 font-mono text-[10.5px] text-ink-dim"
+          style={tint ? { color: tint } : undefined}
+        >
+          {target}
+        </span>
         {note && (
           <span className="min-w-0 flex-1 truncate font-mono text-[10.5px] text-ink-dim">
             {note}
@@ -779,24 +888,81 @@ export function TerminalView({
       </div>
 
       {settings.statusBar && (
-        <div className="flex h-6 shrink-0 items-center gap-3 border-t border-edge bg-bg-panel effect-surface px-3 font-mono text-[10px] text-ink-dim">
-          <span className="flex items-center gap-1.5">
-            <span className={`h-1 w-1 shrink-0 rounded-full ${statusColor}`} />
-            {session.status}
-          </span>
-          <span className="min-w-0 truncate text-ink-mid">{target}</span>
-          <div className="ml-auto flex shrink-0 items-center gap-3">
-            {recording && <span className="text-err">● log</span>}
-            {runningTunnels > 0 && <span className="text-ok">{runningTunnels} fwd</span>}
-            {recordingMacro && <span className="text-accent">● macro</span>}
-            {uptime && <span title="Time connected">{uptime}</span>}
-            {usesPty && grid.cols > 0 && (
-              <span title="Terminal grid">
-                {grid.cols}×{grid.rows}
+        <div
+          className={cn(
+            "flex h-6 shrink-0 items-center border-t border-edge bg-bg-panel effect-surface font-mono text-[10px] text-ink-dim",
+            colorBar ? "gap-px pl-0 pr-0" : "gap-3 px-3"
+          )}
+          style={tint ? { borderTopColor: `${tint}66` } : undefined}
+        >
+          {colorBar ? (
+            <>
+              <span
+                className={cn("flex items-center gap-1.5 px-2 py-[3px]", segmentTone)}
+                title="Session status"
+              >
+                <span className={`h-1 w-1 shrink-0 rounded-full ${statusColor}`} />
+                {session.status}
               </span>
-            )}
-            <span title="Terminal encoding">UTF-8</span>
-          </div>
+              <span
+                className="flex min-w-0 items-center gap-1.5 px-2 py-[3px] text-ink-mid"
+                style={
+                  tint
+                    ? { backgroundColor: `${tint}1f`, color: tint }
+                    : { backgroundColor: "rgba(91,140,255,0.12)" }
+                }
+                title="Connected to"
+              >
+                <span className="truncate">{target}</span>
+              </span>
+              <div className="ml-auto flex shrink-0 items-center gap-px">
+                {recording && <span className="bg-err/15 px-2 py-[3px] text-err">● log</span>}
+                {runningTunnels > 0 && (
+                  <span className="bg-ok/15 px-2 py-[3px] text-ok">{runningTunnels} fwd</span>
+                )}
+                {recordingMacro && (
+                  <span className="bg-accent/15 px-2 py-[3px] text-accent">● macro</span>
+                )}
+                <span className="bg-warn/15 px-2 py-[3px] text-warn" title="Local time">
+                  <Clock size={9} className="mr-1 inline-block align-[-1px]" />
+                  {clock}
+                </span>
+                {uptime && (
+                  <span className="bg-ok/12 px-2 py-[3px] text-ok" title="Time connected">
+                    {uptime}
+                  </span>
+                )}
+                {usesPty && grid.cols > 0 && (
+                  <span className="px-2 py-[3px]" title="Terminal grid">
+                    {grid.cols}×{grid.rows}
+                  </span>
+                )}
+                <span className="px-2 py-[3px]" title="Terminal encoding">
+                  UTF-8
+                </span>
+              </div>
+            </>
+          ) : (
+            <>
+              <span className="flex items-center gap-1.5">
+                <span className={`h-1 w-1 shrink-0 rounded-full ${statusColor}`} />
+                {session.status}
+              </span>
+              <span className="min-w-0 truncate text-ink-mid">{target}</span>
+              <div className="ml-auto flex shrink-0 items-center gap-3">
+                {recording && <span className="text-err">● log</span>}
+                {runningTunnels > 0 && <span className="text-ok">{runningTunnels} fwd</span>}
+                {recordingMacro && <span className="text-accent">● macro</span>}
+                {uptime && <span title="Time connected">{uptime}</span>}
+                {usesPty && grid.cols > 0 && (
+                  <span title="Terminal grid">
+                    {grid.cols}×{grid.rows}
+                  </span>
+                )}
+                <span title="Terminal encoding">UTF-8</span>
+              </div>
+            </>
+          )}
         </div>
       )}
 
@@ -890,6 +1056,18 @@ export function TerminalView({
           lines={splitPasteLines(pastePending)}
           onConfirm={confirmPaste}
           onCancel={cancelPaste}
+        />
+      )}
+
+      {authError !== null && retryField && (
+        <PasswordPrompt
+          title="Authentication failed"
+          target={target}
+          error={authError}
+          kind={retryField}
+          busy={authBusy}
+          onSubmit={retryWithSecret}
+          onCancel={() => setAuthError(null)}
         />
       )}
     </div>

@@ -267,7 +267,19 @@
            below are the static fallback shown when the API is unreachable. -->
       <div data-changelog>
       <div class="clog">
-        <div class="clog-v"><div style="display:flex;align-items:center;gap:8px;"><span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:#5b8cff;">v1.1.1</span><span style="border-radius:5px;background:rgba(62,207,142,0.1);padding:1px 7px;font-family:'JetBrains Mono',monospace;font-size:10px;color:#3ecf8e;">latest</span></div><div class="clog-d">aug 2026</div></div>
+        <div class="clog-v"><div style="display:flex;align-items:center;gap:8px;"><span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:#5b8cff;">v1.1.2</span><span style="border-radius:5px;background:rgba(62,207,142,0.1);padding:1px 7px;font-family:'JetBrains Mono',monospace;font-size:10px;color:#3ecf8e;">latest</span></div><div class="clog-d">sep 2026</div></div>
+        <div class="clog-body"><div class="clog-h">Retry a wrong password, colour on connect</div>
+          <ul class="clog-ul">
+            <li>A saved session whose password the server rejects now asks for it again instead of leaving a dead tab. Type the right one and it connects, and the corrected password is written back to the saved session &mdash; but only after the server accepts it, so a second wrong guess never overwrites a working one. Covers SSH, SFTP and FTP, and asks for the key passphrase where that is what failed</li>
+            <li>A MobaXterm-style connect banner: a coloured box at the top of each session with the target, port, auth method, jump host, saved forwards and login command. It scrolls away with the session and lands in the log</li>
+            <li>The terminal status bar is drawn as coloured segments &mdash; green connected, amber connecting, red on error &mdash; with a clock alongside the uptime, grid and encoding</li>
+            <li>The accent colour set on a connection now tints that session's toolbar and status bar, so prod doesn't look like staging</li>
+            <li>All three are on by default and switch off individually in Settings &rsaquo; General</li>
+          </ul>
+        </div>
+      </div>
+      <div class="clog">
+        <div class="clog-v"><span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:#5b8cff;">v1.1.1</span><div class="clog-d">aug 2026</div></div>
         <div class="clog-body"><div class="clog-h">Reorder quick commands and macros</div>
           <ul class="clog-ul">
             <li>Quick commands can be reordered — drag a row by its grip in the manage dialog and the chips above the compose bar follow that order, so the ones you actually use sit where your eye lands</li>

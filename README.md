@@ -33,6 +33,12 @@ browser.
 - **Macros** — hit **Macro** on a terminal to record the commands you type, name
   the result, and replay it into any session from a chip in the bottom dock.
   Steps are paced so the shell keeps up.
+- **Password retry** — when a saved session is rejected by the server, Dshh asks
+  for the password (or key passphrase) again rather than leaving a dead tab, and
+  writes the corrected one back to the session once the server accepts it.
+- **Session colours** — a coloured connect banner in the terminal, a segmented
+  status bar with a clock, and the connection's own accent tinting its toolbar.
+  All three toggle in Settings › General.
 - **Reorderable chips** — quick commands and macros both list in the order their
   chips appear. Drag a row by its grip in the manage dialog to move it, or focus
   the grip and press ↑/↓.

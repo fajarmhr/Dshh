@@ -43,6 +43,12 @@ export interface Settings {
   collapseGroupsByDefault: boolean;
   /** Persistent bar under the terminal showing host, latency and encoding. */
   statusBar: boolean;
+  /** MobaXterm-style coloured box printed into the terminal on connect. */
+  connectBanner: boolean;
+  /** Draw the status bar as coloured segments rather than dim monochrome text. */
+  colorStatusBar: boolean;
+  /** Tint session chrome with the connection's own accent colour. */
+  tintByConnection: boolean;
   /** Windows 11 backdrop behind the app chrome. */
   windowEffect: WindowEffect;
   // ---- Terminal appearance (MobaXterm's Terminal settings tab) ----
@@ -99,6 +105,9 @@ const DEFAULT_SETTINGS: Settings = {
   sessionsDir: "",
   collapseGroupsByDefault: true,
   statusBar: true,
+  connectBanner: true,
+  colorStatusBar: true,
+  tintByConnection: true,
   windowEffect: "opaque",
   themeId: DEFAULT_THEME_ID,
   fontFamily: '"JetBrains Mono Variable", "Cascadia Code", Consolas, monospace',
