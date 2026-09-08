@@ -267,7 +267,17 @@
            below are the static fallback shown when the API is unreachable. -->
       <div data-changelog>
       <div class="clog">
-        <div class="clog-v"><div style="display:flex;align-items:center;gap:8px;"><span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:#5b8cff;">v1.1.2</span><span style="border-radius:5px;background:rgba(62,207,142,0.1);padding:1px 7px;font-family:'JetBrains Mono',monospace;font-size:10px;color:#3ecf8e;">latest</span></div><div class="clog-d">sep 2026</div></div>
+        <div class="clog-v"><div style="display:flex;align-items:center;gap:8px;"><span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:#5b8cff;">v1.1.3</span><span style="border-radius:5px;background:rgba(62,207,142,0.1);padding:1px 7px;font-family:'JetBrains Mono',monospace;font-size:10px;color:#3ecf8e;">latest</span></div><div class="clog-d">sep 2026</div></div>
+        <div class="clog-body"><div class="clog-h">Corrected credentials are kept by default</div>
+          <ul class="clog-ul">
+            <li>A password typed into the auth-failure prompt is now saved to the session by default, with no checkbox to tick each time &mdash; being asked at all means what was stored is wrong or missing. Settings &rsaquo; General turns the write off if you would rather each retry be one-time</li>
+            <li>A session saved without a username asks for one alongside the password, and keeps both</li>
+            <li>The connect banner drops its Dshh masthead and starts at the session line, so the box is three lines shorter</li>
+          </ul>
+        </div>
+      </div>
+      <div class="clog">
+        <div class="clog-v"><span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:#5b8cff;">v1.1.2</span><div class="clog-d">sep 2026</div></div>
         <div class="clog-body"><div class="clog-h">Retry a wrong password, colour on connect</div>
           <ul class="clog-ul">
             <li>A saved session whose password the server rejects now asks for it again instead of leaving a dead tab. Type the right one and it connects, and the corrected password is written back to the saved session &mdash; but only after the server accepts it, so a second wrong guess never overwrites a working one. Covers SSH, SFTP and FTP, and asks for the key passphrase where that is what failed</li>

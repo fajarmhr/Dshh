@@ -38,16 +38,8 @@ const PROTOCOL_TITLES: Record<Protocol, string> = {
   local: "Local shell",
 };
 
-/**
- * The lines of the connect banner, without trailing newlines. Callers write
- * them into xterm; `appVersion` is passed in because the banner is pure and
- * the version comes from an async backend call.
- */
-export function connectBanner(
-  conn: Connection,
-  protocol: Protocol,
-  appVersion: string
-): string[] {
+/** The lines of the connect banner, without trailing newlines. */
+export function connectBanner(conn: Connection, protocol: Protocol): string[] {
   const target =
     protocol === "serial"
       ? String(conn.serialPort ?? "serial port")
@@ -84,8 +76,6 @@ export function connectBanner(
     rows.push({ label: "on login", value: conn.runOnConnect.trim(), color: YELLOW });
   }
 
-  const title = `${GREEN}• Dshh ${appVersion} •${RESET}`;
-  const subtitle = `${GREEN}(multi-protocol connection client)${RESET}`;
   const headline = `${CYAN}▸ ${PROTOCOL_TITLES[protocol]} ${YELLOW}${target}${RESET}`;
   // Labels are padded to one column so the values line up under each other.
   const labelWidth = Math.max(0, ...rows.map((r) => r.label.length));
@@ -94,18 +84,16 @@ export function connectBanner(
       `   ${DIM}${r.label.padEnd(labelWidth)} :${RESET} ${r.color ?? GREEN}${r.value}${RESET}`
   );
 
-  const body = [title, subtitle, "", headline, ...detail];
+  // No product masthead: the app's own name and version are already in the
+  // window, and a session that scrolls this back wants the target, not an ad.
+  const body = [headline, ...detail];
   const inner = Math.max(...body.map(width)) + 2;
-  const pad = (line: string) => `${DIM}│${RESET} ${line}${" ".repeat(Math.max(0, inner - width(line) - 1))}${DIM}│${RESET}`;
+  const pad = (line: string) =>
+    `${DIM}│${RESET} ${line}${" ".repeat(Math.max(0, inner - width(line) - 1))}${DIM}│${RESET}`;
 
   return [
     `${DIM}┌${"─".repeat(inner)}┐${RESET}`,
-    // The two heading lines are centred, the rest hangs off the left margin.
-    ...body.map((line, i) =>
-      i < 2
-        ? pad(`${" ".repeat(Math.floor((inner - 1 - width(line)) / 2))}${line}`)
-        : pad(line)
-    ),
+    ...body.map(pad),
     `${DIM}└${"─".repeat(inner)}┘${RESET}`,
   ];
 }

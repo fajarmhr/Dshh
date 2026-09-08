@@ -49,6 +49,12 @@ export interface Settings {
   colorStatusBar: boolean;
   /** Tint session chrome with the connection's own accent colour. */
   tintByConnection: boolean;
+  /**
+   * Write a credential typed into the auth-failure prompt back to the saved
+   * connection once the server accepts it. On by default: the whole point of
+   * being asked is that what was stored is wrong or missing.
+   */
+  saveRetriedCredentials: boolean;
   /** Windows 11 backdrop behind the app chrome. */
   windowEffect: WindowEffect;
   // ---- Terminal appearance (MobaXterm's Terminal settings tab) ----
@@ -108,6 +114,7 @@ const DEFAULT_SETTINGS: Settings = {
   connectBanner: true,
   colorStatusBar: true,
   tintByConnection: true,
+  saveRetriedCredentials: true,
   windowEffect: "opaque",
   themeId: DEFAULT_THEME_ID,
   fontFamily: '"JetBrains Mono Variable", "Cascadia Code", Consolas, monospace',

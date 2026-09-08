@@ -1,7 +1,7 @@
 {
   "name": "dshh",
   "private": true,
-  "version": "1.1.2",
+  "version": "1.1.3",
   "type": "module",
   "description": "Modern multi-protocol connection client (SSH / SFTP / FTP / Serial) built on Tauri 2",
   "scripts": {

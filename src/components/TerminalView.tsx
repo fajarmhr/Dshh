@@ -42,7 +42,6 @@ import {
   defaultLogDir,
   clipboardRead,
   clipboardWrite,
-  appVersion,
 } from "../lib/api";
 import {
   broadcastToTerminals,
@@ -389,8 +388,8 @@ export function TerminalView({
   const connect = async (secret?: {
     field: "password" | "passphrase";
     value: string;
-    /** Write it back to the saved connection once the server accepts it. */
-    remember: boolean;
+    /** Supplied when the session was saved without one. */
+    username?: string;
   }) => {
     const term = termRef.current;
     const life = lifeRef.current;
@@ -398,7 +397,11 @@ export function TerminalView({
     connectingRef.current = true;
     setStatus(session.id, "connecting");
     const attemptConn: Connection = secret
-      ? { ...conn, [secret.field]: secret.value }
+      ? {
+          ...conn,
+          [secret.field]: secret.value,
+          ...(secret.username ? { username: secret.username } : {}),
+        }
       : conn;
     try {
       term.writeln(
@@ -458,8 +461,16 @@ export function TerminalView({
       // The server accepted it, so now it is worth keeping. Transient
       // connections (one-off local shells) aren't in the saved list; writing
       // them back would resurrect a tab the user never saved.
-      if (secret?.remember && useStore.getState().connections.some((c) => c.id === conn.id)) {
-        useStore.getState().updateConnection(conn.id, { [secret.field]: secret.value });
+      const store = useStore.getState();
+      if (
+        secret &&
+        store.settings.saveRetriedCredentials &&
+        store.connections.some((c) => c.id === conn.id)
+      ) {
+        store.updateConnection(conn.id, {
+          [secret.field]: secret.value,
+          ...(secret.username ? { username: secret.username } : {}),
+        });
       }
       registerTerminal(session.id, {
         send: (d) => writeBackend(d),
@@ -469,11 +480,8 @@ export function TerminalView({
       // MobaXterm's login banner: what this tab is attached to, in colour,
       // written before the remote shell's own greeting arrives.
       if (useStore.getState().settings.connectBanner) {
-        const version = await appVersion().catch(() => "");
-        if (!life.dead && backendId.current === id) {
-          for (const line of connectBanner(liveConn, session.protocol, version)) {
-            term.writeln(line);
-          }
+        for (const line of connectBanner(liveConn, session.protocol)) {
+          term.writeln(line);
         }
       }
 
@@ -724,11 +732,11 @@ export function TerminalView({
   };
 
   /** Retry with the credential just typed into the prompt. */
-  const retryWithSecret = (value: string, remember: boolean) => {
+  const retryWithSecret = (value: string, username: string) => {
     if (!retryField) return;
     setAuthBusy(true);
     termRef.current?.writeln("");
-    connect({ field: retryField, value, remember });
+    connect({ field: retryField, value, username: username || undefined });
   };
 
   /** What this session is attached to, as shown in the toolbar and status bar. */
@@ -1065,7 +1073,9 @@ export function TerminalView({
           target={target}
           error={authError}
           kind={retryField}
+          needsUsername={!liveConn.username?.trim()}
           busy={authBusy}
+          remembers={settings.saveRetriedCredentials}
           onSubmit={retryWithSecret}
           onCancel={() => setAuthError(null)}
         />

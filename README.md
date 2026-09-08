@@ -35,7 +35,8 @@ browser.
   Steps are paced so the shell keeps up.
 - **Password retry** — when a saved session is rejected by the server, Dshh asks
   for the password (or key passphrase) again rather than leaving a dead tab, and
-  writes the corrected one back to the session once the server accepts it.
+  keeps the one that works — along with a username the session was missing —
+  once the server accepts it. Switch the write off in Settings › General.
 - **Session colours** — a coloured connect banner in the terminal, a segmented
   status bar with a clock, and the connection's own accent tinting its toolbar.
   All three toggle in Settings › General.

@@ -41,6 +41,7 @@ export function FileBrowser({
 }) {
   const isSftp = session.protocol === "sftp";
   const setStatus = useStore((s) => s.setSessionStatus);
+  const settings = useStore((s) => s.settings);
   const [backendId, setBackendId] = useState<string | null>(null);
   const [cwd, setCwd] = useState<string>(isSftp ? "." : "/");
   const [files, setFiles] = useState<RemoteFile[]>([]);
@@ -104,9 +105,15 @@ export function FileBrowser({
    * attempt only, and is written back to the connection just once the server
    * has accepted it.
    */
-  const openConnection = async (secret?: { value: string; remember: boolean }) => {
+  const openConnection = async (secret?: { value: string; username?: string }) => {
     const attempt: Connection =
-      secret && retryField ? { ...conn, [retryField]: secret.value } : conn;
+      secret && retryField
+        ? {
+            ...conn,
+            [retryField]: secret.value,
+            ...(secret.username ? { username: secret.username } : {}),
+          }
+        : conn;
     try {
       const id = isSftp ? await sftpConnect(attempt) : await ftpConnect(attempt);
       if (disposedRef.current) {
@@ -118,12 +125,17 @@ export function FileBrowser({
       setBackendId(id);
       setStatus(session.id, "connected");
       setAuthError(null);
+      const store = useStore.getState();
       if (
-        secret?.remember &&
+        secret &&
         retryField &&
-        useStore.getState().connections.some((c) => c.id === conn.id)
+        store.settings.saveRetriedCredentials &&
+        store.connections.some((c) => c.id === conn.id)
       ) {
-        useStore.getState().updateConnection(conn.id, { [retryField]: secret.value });
+        store.updateConnection(conn.id, {
+          [retryField]: secret.value,
+          ...(secret.username ? { username: secret.username } : {}),
+        });
       }
       await list(id, isSftp ? "." : "/");
     } catch (e) {
@@ -497,9 +509,11 @@ export function FileBrowser({
           error={authError}
           kind={retryField}
           busy={authBusy}
-          onSubmit={(value, remember) => {
+          needsUsername={!conn.username?.trim()}
+          remembers={settings.saveRetriedCredentials}
+          onSubmit={(value, username) => {
             setAuthBusy(true);
-            openConnection({ value, remember });
+            openConnection({ value, username: username || undefined });
           }}
           onCancel={() => setAuthError(null)}
         />

@@ -4,12 +4,14 @@ import { overlayDismiss } from "../lib/utils";
 
 /**
  * Shown when a saved session is rejected by the server: the credential is
- * wrong, so ask for it again rather than leaving a dead tab whose only exit is
- * editing the connection by hand.
+ * wrong or was never saved, so ask for it again rather than leaving a dead tab
+ * whose only exit is editing the connection by hand.
  *
- * "Save to this session" is on by default and only writes after the retry
- * actually succeeds — a second wrong password must not overwrite a working one
- * that merely expired in the user's memory.
+ * What is typed here is written back to the session once the server accepts it
+ * — never before, so a second wrong guess can't overwrite a working password.
+ * That write is a setting rather than a checkbox on this dialog: being asked at
+ * all means the stored credential is wrong, and correcting it every time is
+ * what people want. Settings › General turns it off.
  */
 export function PasswordPrompt({
   title,
@@ -17,7 +19,10 @@ export function PasswordPrompt({
   error,
   /** "password" or "passphrase" — whichever the failing auth method needs. */
   kind,
+  /** Ask for a username too: the session was saved without one. */
+  needsUsername,
   busy,
+  remembers,
   onSubmit,
   onCancel,
 }: {
@@ -25,16 +30,20 @@ export function PasswordPrompt({
   target: string;
   error: string;
   kind: "password" | "passphrase";
+  needsUsername: boolean;
   busy: boolean;
-  onSubmit: (secret: string, remember: boolean) => void;
+  /** Whether the accepted credential will be saved, for the footer note. */
+  remembers: boolean;
+  onSubmit: (secret: string, username: string) => void;
   onCancel: () => void;
 }) {
   const [secret, setSecret] = useState("");
-  const [remember, setRemember] = useState(true);
+  const [username, setUsername] = useState("");
 
+  const ready = !!secret && (!needsUsername || !!username.trim());
   const submit = () => {
-    if (!secret || busy) return;
-    onSubmit(secret, remember);
+    if (!ready || busy) return;
+    onSubmit(secret, username.trim());
   };
 
   return (
@@ -55,10 +64,31 @@ export function PasswordPrompt({
             {error}
           </div>
 
+          {needsUsername && (
+            <div>
+              <label className="field-label">username for {target}</label>
+              <input
+                autoFocus
+                className="field-input font-mono"
+                value={username}
+                placeholder="username"
+                disabled={busy}
+                onChange={(e) => setUsername(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") submit();
+                  if (e.key === "Escape") onCancel();
+                }}
+              />
+            </div>
+          )}
+
           <div>
-            <label className="field-label">{kind} for {target}</label>
+            <label className="field-label">
+              {kind}
+              {needsUsername ? "" : ` for ${target}`}
+            </label>
             <input
-              autoFocus
+              autoFocus={!needsUsername}
               type="password"
               className="field-input font-mono"
               value={secret}
@@ -71,31 +101,26 @@ export function PasswordPrompt({
               }}
             />
           </div>
-
-          <label className="flex cursor-pointer items-start gap-2.5">
-            <input
-              type="checkbox"
-              className="mt-0.5"
-              checked={remember}
-              onChange={(e) => setRemember(e.target.checked)}
-            />
-            <span className="text-sm text-ink-hi">
-              Save to this session
-              <span className="mt-0.5 block text-[11px] leading-relaxed text-ink-dim">
-                Replaces the stored {kind}, but only once this one connects. A
-                master password, if set, encrypts it the same as the rest.
-              </span>
-            </span>
-          </label>
         </div>
 
-        <div className="flex items-center justify-end gap-2 border-t border-edge px-5 py-3">
-          <button onClick={onCancel} className="btn-ghost" disabled={busy}>
-            Cancel
-          </button>
-          <button onClick={submit} disabled={!secret || busy} className="btn-primary disabled:opacity-40">
-            {busy ? "Connecting…" : "Retry"}
-          </button>
+        <div className="flex items-center justify-between gap-3 border-t border-edge px-5 py-3">
+          <span className="font-mono text-[10px] leading-relaxed text-ink-dim">
+            {remembers
+              ? "saved to this session once it connects"
+              : "used for this attempt only (saving is off in Settings)"}
+          </span>
+          <div className="flex shrink-0 items-center gap-2">
+            <button onClick={onCancel} className="btn-ghost" disabled={busy}>
+              Cancel
+            </button>
+            <button
+              onClick={submit}
+              disabled={!ready || busy}
+              className="btn-primary disabled:opacity-40"
+            >
+              {busy ? "Connecting…" : "Retry"}
+            </button>
+          </div>
         </div>
       </div>
     </div>

@@ -434,6 +434,26 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                   <input
                     type="checkbox"
                     className="mt-0.5"
+                    checked={settings.saveRetriedCredentials}
+                    onChange={(e) =>
+                      setSettings({ saveRetriedCredentials: e.target.checked })
+                    }
+                  />
+                  <span className="text-sm text-ink-hi">
+                    Save a corrected password to the session
+                    <span className="mt-0.5 block text-[11px] leading-relaxed text-ink-dim">
+                      When a saved session is rejected, Dshh asks for the password
+                      (or key passphrase) and keeps the one that works, along with a
+                      username the session was missing. Only ever written after the
+                      server accepts it. Off means the retry is one-time.
+                    </span>
+                  </span>
+                </label>
+
+                <label className="flex cursor-pointer items-start gap-2.5 rounded-md px-1 py-2">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
                     checked={settings.colorStatusBar}
                     disabled={!settings.statusBar}
                     onChange={(e) => setSettings({ colorStatusBar: e.target.checked })}
