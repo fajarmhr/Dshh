@@ -267,7 +267,18 @@
            below are the static fallback shown when the API is unreachable. -->
       <div data-changelog>
       <div class="clog">
-        <div class="clog-v"><div style="display:flex;align-items:center;gap:8px;"><span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:#5b8cff;">v1.1.3</span><span style="border-radius:5px;background:rgba(62,207,142,0.1);padding:1px 7px;font-family:'JetBrains Mono',monospace;font-size:10px;color:#3ecf8e;">latest</span></div><div class="clog-d">sep 2026</div></div>
+        <div class="clog-v"><div style="display:flex;align-items:center;gap:8px;"><span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:#5b8cff;">v1.2.0</span><span style="border-radius:5px;background:rgba(62,207,142,0.1);padding:1px 7px;font-family:'JetBrains Mono',monospace;font-size:10px;color:#3ecf8e;">latest</span></div><div class="clog-d">sep 2026</div></div>
+        <div class="clog-body"><div class="clog-h">Sort, group and search the file browser</div>
+          <ul class="clog-ul">
+            <li>Sort SFTP and FTP listings by name, type, size or date &mdash; click a column header, or pick from the new sort menu. Names sort naturally, so file2 comes before file10</li>
+            <li>Group a folder by type (code, images, archives&hellip;), by date (today, yesterday, last 7 days&hellip;) or by Explorer-style size bands. Groups fold away with a click</li>
+            <li>A filter box narrows the folder as you type, with * wildcards. Press Enter and it searches every subfolder on the server instead, streaming matches in with a stop button; each result shows where it lives and jumps to its folder</li>
+            <li>The local pane in split view gets the same sort, group and filter, and each pane remembers its own choice between sessions</li>
+          </ul>
+        </div>
+      </div>
+      <div class="clog">
+        <div class="clog-v"><span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:#5b8cff;">v1.1.3</span><div class="clog-d">sep 2026</div></div>
         <div class="clog-body"><div class="clog-h">Corrected credentials are kept by default</div>
           <ul class="clog-ul">
             <li>A password typed into the auth-failure prompt is now saved to the session by default, with no checkbox to tick each time &mdash; being asked at all means what was stored is wrong or missing. Settings &rsaquo; General turns the write off if you would rather each retry be one-time</li>

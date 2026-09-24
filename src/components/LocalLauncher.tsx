@@ -62,7 +62,7 @@ export function LocalLauncher() {
       {open && (
         <div
           ref={menuRef}
-          className="absolute right-0 top-full z-30 mt-1 w-60 animate-fade-up overflow-hidden rounded-lg border border-edge bg-bg-panel/97 py-1 shadow-[0_16px_40px_-10px_rgba(4,10,20,0.85)] backdrop-blur-sm"
+          className="absolute right-0 top-full z-30 mt-1 w-60 animate-fade-up overflow-hidden rounded-lg border border-edge bg-bg-panel/95 py-1 shadow-[0_16px_40px_-10px_rgba(4,10,20,0.85)] backdrop-blur-sm"
         >
           <div className="micro-label px-3 py-1">Local terminal</div>
           {shells.length === 0 ? (

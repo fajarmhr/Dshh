@@ -64,6 +64,12 @@ browser.
   uploads back automatically. Listings show each file's **owner** (uids resolved
   against the server's own `/etc/passwd`), and every transfer draws a **progress
   bar** with bytes moved and percentage. Plus saved-session sync.
+- **Sort, group and search files** — click a column (or use the sort menu) to
+  order by name, type, size or date; group the listing by type, date or size
+  bands, with collapsible groups. The filter box narrows the folder as you type
+  (`*` wildcards work), and **Enter searches every subfolder** on the server,
+  streaming matches in with a stop button. The local pane in split view gets
+  the same sort, group and filter; each pane remembers its own choice.
 - **Port forwarding, all three directions** — local (`ssh -L`), remote
   (`ssh -R`, the server listens for you) and dynamic (`ssh -D`, a built-in
   SOCKS5 proxy). Each forward runs on its own SSH connection and shows live
