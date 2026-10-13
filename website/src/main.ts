@@ -22,7 +22,8 @@ document
 menu?.querySelectorAll("a").forEach((a) => a.addEventListener("click", () => menu.classList.remove("open")));
 
 // --- Active nav dot on scroll ---
-const sections = ["dsh-features", "dsh-download", "dsh-changelog", "dsh-docs"];
+// The changelog has its own page now, so it is no longer a section here.
+const sections = ["dsh-features", "dsh-download", "dsh-docs"];
 const navLinks = new Map<string, HTMLElement>();
 document.querySelectorAll<HTMLElement>("[data-nav]").forEach((el) => navLinks.set(el.dataset.nav as string, el));
 function onScroll(): void {
@@ -194,7 +195,44 @@ function renderChangelog(rels: Release[]): void {
   root.replaceChildren(...out);
 }
 
-fetch(`https://api.github.com/repos/${REPO}/releases?per_page=10`)
+/** `v1.3.0` → [1, 3, 0]; anything unparseable compares as 0s. */
+function versionParts(tag: string): number[] {
+  return tag.replace(/^v/i, "").split(".").map((n) => parseInt(n, 10) || 0);
+}
+
+/** True when tag `a` is a later version than tag `b`. */
+function isNewer(a: string, b: string): boolean {
+  const [x, y] = [versionParts(a), versionParts(b)];
+  for (let i = 0; i < Math.max(x.length, y.length); i++) {
+    if ((x[i] ?? 0) !== (y[i] ?? 0)) return (x[i] ?? 0) > (y[i] ?? 0);
+  }
+  return false;
+}
+
+/**
+ * The home page's "what's new" card. Shows the first few bullets of the
+ * latest release. The hand-written card stays when GitHub's notes have no
+ * bullets (auto-generated notes often don't), and when the site already
+ * describes a newer version than GitHub has published yet.
+ */
+function renderTeaser(rel: Release): void {
+  const ver = document.querySelector<HTMLElement>("[data-teaser-ver]");
+  const title = document.querySelector<HTMLElement>("[data-teaser-title]");
+  const list = document.querySelector<HTMLElement>("[data-teaser-items]");
+  if (!ver || !title || !list) return;
+  const tag = rel.tag_name || "";
+  const items = bullets(rel.body || "");
+  if (items.length === 0 || isNewer(ver.textContent?.trim() || "", tag)) return;
+  ver.textContent = tag;
+  const date = document.querySelector<HTMLElement>("[data-teaser-date]");
+  if (date) date.textContent = monthYear(rel.published_at);
+  title.textContent = rel.name && rel.name !== tag ? rel.name : `Release ${tag}`;
+  const shown = items.slice(0, 3).map((b) => el("li", "", b));
+  if (items.length > 3) shown.push(el("li", "color:#5a6878;", `and ${items.length - 3} more`));
+  list.replaceChildren(...shown);
+}
+
+fetch(`https://api.github.com/repos/${REPO}/releases?per_page=50`)
   .then((r) => (r.ok ? (r.json() as Promise<Release[]>) : Promise.reject(new Error("HTTP " + r.status))))
   .then((all) => {
     const rels = all.filter((r) => !r.draft && !r.prerelease);
@@ -220,6 +258,7 @@ fetch(`https://api.github.com/repos/${REPO}/releases?per_page=10`)
         .forEach((e) => (e.textContent = `Dshh ${tag.replace(/^v/i, "")} — portable`));
     }
     renderChangelog(rels);
+    renderTeaser(latest);
   })
   .catch(() => {
     liveNotes.forEach((n) => (n.textContent = "releases: github.com/fajarmhr/Dshh/releases"));

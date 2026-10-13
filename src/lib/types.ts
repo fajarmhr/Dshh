@@ -81,6 +81,10 @@ export interface Connection {
   // Per-session terminal overrides; fall back to the global settings.
   themeId?: string;
   fontSize?: number;
+  /** File browser zoom (1 = 100%), set with Ctrl+scroll over the list. */
+  fileZoom?: number;
+  /** VNC screen scale set with Ctrl+scroll; absent means fit to the tab. */
+  vncScale?: number;
   // SSH extras
   tunnels?: TunnelDef[];
   // Optional SSH jump host (bastion) — one hop.
@@ -144,6 +148,8 @@ export interface RemoteFile {
    */
   owner?: string | null;
   group?: string | null;
+  /** Permission bits such as 0o755, when the server reports them. */
+  mode?: number | null;
 }
 
 /** A listing plus the path the server resolved it to ("." → "/home/you"). */

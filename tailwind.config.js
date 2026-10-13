@@ -42,9 +42,12 @@ export default {
         mono: ['"JetBrains Mono Variable"', '"Cascadia Code"', "Consolas", "monospace"],
       },
       keyframes: {
+        // Uses the standalone `translate` property, not `transform`: the
+        // animation fills `both`, and a held `transform` would cancel
+        // utilities like -translate-x-1/2 that centre floating pills.
         "fade-up": {
-          from: { opacity: "0", transform: "translateY(4px)" },
-          to: { opacity: "1", transform: "translateY(0)" },
+          from: { opacity: "0", translate: "0 4px" },
+          to: { opacity: "1", translate: "0 0" },
         },
         "modal-in": {
           from: { opacity: "0", transform: "scale(0.97) translateY(6px)" },

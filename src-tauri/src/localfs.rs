@@ -30,6 +30,7 @@ pub fn local_fs_list(path: String) -> Result<Vec<RemoteFile>, String> {
                         modified: None,
                         owner: None,
                         group: None,
+                        mode: None,
                     });
                 }
             }
@@ -57,7 +58,17 @@ pub fn local_fs_list(path: String) -> Result<Vec<RemoteFile>, String> {
             // The local pane doesn't show ownership; Windows has no uid to show.
             owner: None,
             group: None,
+            mode: None,
         });
     }
     Ok(out)
+}
+
+/// Create a local folder and any missing parents — where a remote folder
+/// download recreates the tree it copies.
+#[tauri::command]
+pub async fn local_mkdir(path: String) -> Result<(), String> {
+    tokio::fs::create_dir_all(&path)
+        .await
+        .map_err(|e| format!("Can't create {path}: {e}"))
 }

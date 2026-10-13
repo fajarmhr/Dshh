@@ -12,10 +12,21 @@ import {
   Pencil,
   FolderOpen,
   FolderSearch,
+  Lock,
+  Square,
+  Trash2,
+  UserCog,
   X,
 } from "lucide-react";
 import { LocalPane } from "./LocalPane";
 import { PasswordPrompt } from "./PasswordPrompt";
+import {
+  ChmodDialog,
+  ChownDialog,
+  DeleteConfirm,
+  formatMode,
+  reportText,
+} from "./FileActionDialogs";
 import { TransferBar, type Transfer } from "./TransferBar";
 import {
   GroupRow,
@@ -41,9 +52,34 @@ import {
   ftpUpload,
   ftpDisconnect,
   editStart,
+  sftpTree,
+  sftpDelete,
+  sftpChmod,
+  sftpChown,
+  sftpPrincipals,
+  ftpTree,
+  ftpDelete,
+  ftpChmod,
+  localMkdir,
+  type FileTarget,
+  type FileTree,
 } from "../lib/api";
 import type { Connection, RemoteFile, Session } from "../lib/types";
 import { formatBytes, formatDate, isAuthFailure } from "../lib/utils";
+import { useSaveConnectionPref, wheelSteps } from "../lib/zoom";
+import { downloadPath } from "../lib/localPaths";
+
+/** A bulk action waiting on its dialog. */
+type PendingAction =
+  | { kind: "delete"; items: RemoteFile[]; tree: FileTree | null; error: string | null }
+  | { kind: "chmod"; items: RemoteFile[] }
+  | { kind: "chown"; items: RemoteFile[]; users: string[]; groups: string[] };
+
+const ZOOM_MIN = 0.6;
+const ZOOM_MAX = 2;
+
+const targetsOf = (items: RemoteFile[]): FileTarget[] =>
+  items.map((f) => ({ path: f.path, isDir: f.isDir, size: f.size }));
 
 /** A recursive name search and what it has found so far. */
 interface DeepSearch extends SearchProgress {
@@ -98,6 +134,19 @@ export function FileBrowser({
   const [reveal, setReveal] = useState<string | null>(null);
   /** cwd as the listing callback sees it, to tell a refresh from a move. */
   const cwdRef = useRef(cwd);
+  /** Selected rows, by path. Only ever holds rows currently on screen. */
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  /** Where a Shift+click range starts: the last row clicked without Shift. */
+  const anchorRef = useRef<string | null>(null);
+  const [action, setAction] = useState<PendingAction | null>(null);
+  const [actionBusy, setActionBusy] = useState(false);
+  /** A multi-file download is running; `bulkStop` asks it to end after the current file. */
+  const [bulkRunning, setBulkRunning] = useState(false);
+  const bulkStop = useRef(false);
+  /** List zoom from Ctrl+scroll, remembered on the connection. */
+  const [zoom, setZoom] = useState(conn.fileZoom ?? 1);
+  const saveZoom = useSaveConnectionPref(conn.id);
+  const listRef = useRef<HTMLDivElement>(null);
   // Latest values for the long-lived drag-drop subscription.
   const dropCtx = useRef({ backendId: null as string | null, cwd, isSftp });
   dropCtx.current = { backendId, cwd, isSftp };
@@ -113,6 +162,7 @@ export function FileBrowser({
           searchRun.current++;
           setSearch(null);
           setQuery("");
+          setSelected(new Set());
           cwdRef.current = res.path;
         }
         setFiles(res.files);
@@ -437,6 +487,245 @@ export function FileBrowser({
     () => arrangeFiles(source, query, view),
     [source, query, view]
   );
+  /** Rows on screen, top to bottom — what selection and Shift ranges work over. */
+  const ordered = useMemo(
+    () => groups.flatMap((g) => (g.label && collapsed.has(g.key) ? [] : g.files)),
+    [groups, collapsed]
+  );
+  // Selection follows what is visible: filtering, folding a group or a
+  // refresh that drops a file also drops it from the selection, so an action
+  // never reaches rows the user can't see.
+  useEffect(() => {
+    setSelected((prev) => {
+      if (prev.size === 0) return prev;
+      const visible = new Set(ordered.map((f) => f.path));
+      const next = new Set([...prev].filter((p) => visible.has(p)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [ordered]);
+  const selectedItems = useMemo(
+    () => ordered.filter((f) => selected.has(f.path)),
+    [ordered, selected]
+  );
+  const allSelected = ordered.length > 0 && selectedItems.length === ordered.length;
+
+  /** Explorer rules: click selects one, Ctrl toggles, Shift extends a range. */
+  const clickRow = (e: React.MouseEvent, f: RemoteFile) => {
+    if (e.shiftKey && anchorRef.current) {
+      const a = ordered.findIndex((r) => r.path === anchorRef.current);
+      const b = ordered.findIndex((r) => r.path === f.path);
+      if (a >= 0 && b >= 0) {
+        const range = ordered.slice(Math.min(a, b), Math.max(a, b) + 1).map((r) => r.path);
+        setSelected((prev) => new Set(e.ctrlKey ? [...prev, ...range] : range));
+        return;
+      }
+    }
+    anchorRef.current = f.path;
+    if (e.ctrlKey || e.metaKey) toggleRow(f);
+    else setSelected(new Set([f.path]));
+  };
+
+  const toggleRow = (f: RemoteFile) => {
+    anchorRef.current = f.path;
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(f.path)) next.delete(f.path);
+      else next.add(f.path);
+      return next;
+    });
+  };
+
+  const toggleAll = () =>
+    setSelected(allSelected ? new Set() : new Set(ordered.map((f) => f.path)));
+
+  const onListKey = (e: React.KeyboardEvent) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "a") {
+      e.preventDefault();
+      setSelected(new Set(ordered.map((f) => f.path)));
+    } else if (e.key === "Escape") {
+      setSelected(new Set());
+    } else if (e.key === "Delete" && selectedItems.length) {
+      e.preventDefault();
+      openDelete();
+    } else if (e.ctrlKey && e.key === "0") {
+      e.preventDefault();
+      applyZoom(1);
+    }
+  };
+
+  const applyZoom = (z: number) => {
+    const next = Math.round(Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z)) * 10) / 10;
+    setZoom(next);
+    saveZoom({ fileZoom: next === 1 ? undefined : next });
+  };
+  const zoomRef = useRef(zoom);
+  zoomRef.current = zoom;
+  const applyZoomRef = useRef(applyZoom);
+  applyZoomRef.current = applyZoom;
+
+  // Ctrl+scroll over the list zooms it. A native listener, because React's
+  // wheel handler is passive and can't stop the page from scrolling.
+  useEffect(() => {
+    const el = listRef.current;
+    if (!el) return;
+    const acc = { v: 0 };
+    const onWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey) return;
+      e.preventDefault();
+      const steps = wheelSteps(acc, e);
+      if (steps) applyZoomRef.current(zoomRef.current + steps * 0.1);
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, []);
+
+  // ---- Bulk actions on the selection ----
+
+  const finishAction = (text: string) => {
+    setMsg(text);
+    setAction(null);
+    setSelected(new Set());
+    refresh();
+  };
+
+  const openDelete = () => {
+    if (!backendId || selectedItems.length === 0) return;
+    const items = selectedItems;
+    setAction({ kind: "delete", items, tree: null, error: null });
+    // Count first: the warning should say what a folder actually holds.
+    (isSftp ? sftpTree : ftpTree)(backendId, targetsOf(items))
+      .then((tree) =>
+        setAction((a) => (a?.kind === "delete" && a.items === items ? { ...a, tree } : a))
+      )
+      .catch((e) =>
+        setAction((a) =>
+          a?.kind === "delete" && a.items === items ? { ...a, error: String(e) } : a
+        )
+      );
+  };
+
+  const confirmDelete = async () => {
+    if (!backendId || action?.kind !== "delete") return;
+    setActionBusy(true);
+    try {
+      const r = await (isSftp ? sftpDelete : ftpDelete)(backendId, targetsOf(action.items));
+      finishAction(reportText("Deleted", r));
+    } catch (e) {
+      finishAction(String(e));
+    } finally {
+      setActionBusy(false);
+    }
+  };
+
+  const applyChmod = async (mode: number, recursive: boolean, dirExec: boolean) => {
+    if (!backendId || action?.kind !== "chmod") return;
+    setActionBusy(true);
+    try {
+      const r = await (isSftp ? sftpChmod : ftpChmod)(
+        backendId,
+        targetsOf(action.items),
+        mode,
+        recursive,
+        dirExec
+      );
+      finishAction(reportText(`Set ${formatMode(mode)} on`, r));
+    } catch (e) {
+      finishAction(String(e));
+    } finally {
+      setActionBusy(false);
+    }
+  };
+
+  const openChown = () => {
+    if (!backendId || !isSftp || selectedItems.length === 0) return;
+    const items = selectedItems;
+    setAction({ kind: "chown", items, users: [], groups: [] });
+    sftpPrincipals(backendId)
+      .then(({ users, groups }) =>
+        setAction((a) => (a?.kind === "chown" && a.items === items ? { ...a, users, groups } : a))
+      )
+      .catch(() => {});
+  };
+
+  const applyChown = async (owner: string | null, group: string | null, recursive: boolean) => {
+    if (!backendId || action?.kind !== "chown") return;
+    setActionBusy(true);
+    try {
+      const r = await sftpChown(backendId, targetsOf(action.items), owner, group, recursive);
+      finishAction(reportText(`Gave ${[owner, group].filter(Boolean).join(":")}`, r));
+    } catch (e) {
+      // A name the server doesn't know is worth correcting, not a dead end.
+      setMsg(String(e));
+    } finally {
+      setActionBusy(false);
+    }
+  };
+
+  /**
+   * Download the selection into a local folder, folders as folders: the tree
+   * under each is recreated and every file copied, one at a time with the
+   * progress bar counting through the batch.
+   */
+  const downloadSelected = async () => {
+    const id = backendId;
+    const items = selectedItems;
+    if (!id || items.length === 0) return;
+    if (items.length === 1 && !items[0].isDir) {
+      download(items[0]);
+      return;
+    }
+    const dir = await openDialog({ directory: true, title: "Download to folder" });
+    if (!dir || Array.isArray(dir)) return;
+    const localFor = (path: string) => downloadPath(dir, items, path);
+    bulkStop.current = false;
+    setBulkRunning(true);
+    setBusy(true);
+    try {
+      setMsg("Working out what to download…");
+      const tree: FileTree = items.some((f) => f.isDir)
+        ? await (isSftp ? sftpTree : ftpTree)(id, targetsOf(items))
+        : {
+            entries: items.map((f) => ({ path: f.path, isDir: false, size: f.size, link: false })),
+            unreadable: [],
+          };
+      for (const d of tree.entries.filter((e) => e.isDir)) await localMkdir(localFor(d.path));
+      const files = tree.entries.filter((e) => !e.isDir);
+      let ok = 0;
+      let failed = 0;
+      let firstErr = "";
+      for (const [i, f] of files.entries()) {
+        if (bulkStop.current) break;
+        const name = f.path.split("/").pop() ?? f.path;
+        const batch: [number, number] | undefined =
+          files.length > 1 ? [i + 1, files.length] : undefined;
+        setTransfer({ name, dir: "down", batch, done: 0, total: f.size });
+        try {
+          await (isSftp ? sftpDownload : ftpDownload)(id, f.path, localFor(f.path), (p) =>
+            setTransfer({ name, dir: "down", batch, ...p })
+          );
+          ok++;
+        } catch (e) {
+          failed++;
+          firstErr ||= `${name}: ${String(e)}`;
+        }
+      }
+      const stopped = bulkStop.current && ok + failed < files.length;
+      const skipped = tree.unreadable.length
+        ? ` · ${tree.unreadable.length} unreadable folder${tree.unreadable.length === 1 ? "" : "s"} skipped`
+        : "";
+      setMsg(
+        `${stopped ? "Stopped after" : "Downloaded"} ${ok} of ${files.length} file${
+          files.length === 1 ? "" : "s"
+        } to ${dir}${skipped}${failed ? ` — ${failed} failed: ${firstErr}` : ""}`
+      );
+    } catch (e) {
+      setMsg(String(e));
+    } finally {
+      setTransfer(null);
+      setBulkRunning(false);
+      setBusy(false);
+    }
+  };
   const filtering = query.trim() !== "";
   const searching = search?.state === "running";
 
@@ -470,88 +759,113 @@ export function FileBrowser({
     counts = filtering ? `${shown} of ${plural(files.length, "item")}` : plural(files.length, "item");
   }
 
-  const row = (f: RemoteFile) => (
-    <tr
-      key={f.path}
-      data-path={f.path}
-      onDoubleClick={() => enter(f)}
-      draggable={!f.isDir}
-      onDragStart={(e) => {
-        e.dataTransfer.setData(
-          "application/x-dshh-remote",
-          JSON.stringify({ path: f.path, name: f.name })
-        );
-        e.dataTransfer.effectAllowed = "copy";
-      }}
-      className={`group cursor-default border-b border-edge/40 transition hover:bg-bg-hover ${
-        reveal === f.path ? "bg-accent/15" : ""
-      }`}
-    >
-      <td className="w-full min-w-[9rem] max-w-0 px-3 py-1.5">
-        <div className="flex min-w-0 items-center gap-2.5">
-          {f.isDir ? (
-            <Folder size={15} className="shrink-0 text-warn" />
-          ) : (
-            <FileTypeIcon name={f.name} />
-          )}
-          <span className="min-w-[3rem] truncate text-ink-hi" title={f.name}>
-            {f.name}
-          </span>
-          {search && (
-            <span
-              className="min-w-0 shrink-[4] truncate font-mono text-[10.5px] text-ink-dim"
-              title={f.path}
-            >
-              {relativeDir(search.root, f.path)}/
-            </span>
-          )}
-        </div>
-      </td>
-      <td
-        className="whitespace-nowrap px-3 py-1.5 font-mono text-[11px] text-ink-mid"
-        title={f.group ? `${f.owner ?? "?"}:${f.group}` : undefined}
+  const row = (f: RemoteFile) => {
+    const isSelected = selected.has(f.path);
+    return (
+      <tr
+        key={f.path}
+        data-path={f.path}
+        onClick={(e) => clickRow(e, f)}
+        onMouseDown={(e) => e.shiftKey && e.preventDefault()}
+        onDoubleClick={() => enter(f)}
+        draggable={!f.isDir}
+        onDragStart={(e) => {
+          e.dataTransfer.setData(
+            "application/x-dshh-remote",
+            JSON.stringify({ path: f.path, name: f.name })
+          );
+          e.dataTransfer.effectAllowed = "copy";
+        }}
+        className={`group cursor-default border-b border-edge/40 transition ${
+          isSelected ? "bg-accent/[0.12] hover:bg-accent/[0.16]" : "hover:bg-bg-hover"
+        } ${reveal === f.path ? "bg-accent/15" : ""}`}
       >
-        {f.owner || "—"}
-      </td>
-      <td className="whitespace-nowrap px-3 py-1.5 text-right font-mono text-[11px] text-ink-mid">
-        {f.isDir ? "—" : formatBytes(f.size)}
-      </td>
-      <td className="whitespace-nowrap px-3 py-1.5 text-right font-mono text-[11px] text-ink-dim">
-        {formatDate(f.modified)}
-      </td>
-      <td className="px-2">
-        <div className="flex items-center justify-end gap-0.5">
-          {search && (
-            <button
-              onClick={() => showInFolder(f)}
-              className="rounded p-1 text-ink-dim opacity-0 transition hover:bg-bg-elev hover:text-ink-hi group-hover:opacity-100"
-              title="Show in folder"
-            >
-              <FolderOpen size={14} />
-            </button>
-          )}
-          {!f.isDir && isSftp && (
-            <button
-              onClick={() => editRemote(f)}
-              className="rounded p-1 text-ink-dim opacity-0 transition hover:bg-bg-elev hover:text-ink-hi group-hover:opacity-100"
-              title="Edit in local editor (saves upload automatically)"
-            >
-              <Pencil size={14} />
-            </button>
-          )}
-          {!f.isDir && (
-            <button
-              onClick={() => download(f)}
-              className="rounded p-1 text-ink-dim opacity-0 transition hover:bg-bg-elev hover:text-ink-hi group-hover:opacity-100"
-              title="Download"
-            >
-              <Download size={14} />
-            </button>
-          )}
-        </div>
-      </td>
-    </tr>
-  );
+        <td className="w-8 py-1.5 pl-3 pr-0" onClick={(e) => e.stopPropagation()}>
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={() => toggleRow(f)}
+            aria-label={`Select ${f.name}`}
+            className="block"
+          />
+        </td>
+        <td className="w-full min-w-[9rem] max-w-0 px-3 py-1.5">
+          <div className="flex min-w-0 items-center gap-2.5">
+            {f.isDir ? (
+              <Folder size={15} className="shrink-0 text-warn" />
+            ) : (
+              <FileTypeIcon name={f.name} />
+            )}
+            <span className="min-w-[3rem] truncate text-ink-hi" title={f.name}>
+              {f.name}
+            </span>
+            {search && (
+              <span
+                className="min-w-0 shrink-[4] truncate font-mono text-[10.5px] text-ink-dim"
+                title={f.path}
+              >
+                {relativeDir(search.root, f.path)}/
+              </span>
+            )}
+          </div>
+        </td>
+        <td
+          className="whitespace-nowrap px-3 py-1.5 font-mono text-[11px] text-ink-mid"
+          title={f.group ? `${f.owner ?? "?"}:${f.group}` : undefined}
+        >
+          {f.owner || "—"}
+        </td>
+        <td
+          className="whitespace-nowrap px-3 py-1.5 font-mono text-[11px] text-ink-dim"
+          title={f.mode != null ? `${f.mode.toString(8).padStart(3, "0")}` : undefined}
+        >
+          {f.mode != null ? formatMode(f.mode) : "—"}
+        </td>
+        <td className="whitespace-nowrap px-3 py-1.5 text-right font-mono text-[11px] text-ink-mid">
+          {f.isDir ? "—" : formatBytes(f.size)}
+        </td>
+        <td className="whitespace-nowrap px-3 py-1.5 text-right font-mono text-[11px] text-ink-dim">
+          {formatDate(f.modified)}
+        </td>
+        <td className="px-2">
+          <div className="flex items-center justify-end gap-0.5">
+            {search && (
+              <button
+                onClick={() => showInFolder(f)}
+                className="rounded p-1 text-ink-dim opacity-0 transition hover:bg-bg-elev hover:text-ink-hi group-hover:opacity-100"
+                title="Show in folder"
+              >
+                <FolderOpen size={14} />
+              </button>
+            )}
+            {!f.isDir && isSftp && (
+              <button
+                onClick={() => editRemote(f)}
+                className="rounded p-1 text-ink-dim opacity-0 transition hover:bg-bg-elev hover:text-ink-hi group-hover:opacity-100"
+                title="Edit in local editor (saves upload automatically)"
+              >
+                <Pencil size={14} />
+              </button>
+            )}
+            {!f.isDir && (
+              <button
+                onClick={() => download(f)}
+                className="rounded p-1 text-ink-dim opacity-0 transition hover:bg-bg-elev hover:text-ink-hi group-hover:opacity-100"
+                title="Download"
+              >
+                <Download size={14} />
+              </button>
+            )}
+          </div>
+        </td>
+      </tr>
+    );
+  };
+
+  const selFiles = selectedItems.filter((f) => !f.isDir).length;
+  const selDirs = selectedItems.length - selFiles;
+  const barBtn =
+    "flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[11.5px] text-ink-mid transition hover:bg-bg-hover hover:text-ink-hi disabled:pointer-events-none disabled:opacity-30";
 
   return (
     <div ref={rootRef} className="flex h-full bg-bg-base">
@@ -671,15 +985,37 @@ export function FileBrowser({
         </div>
       )}
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="relative min-h-0 flex-1">
+      <div
+        ref={listRef}
+        tabIndex={-1}
+        onKeyDown={onListKey}
+        className={`h-full overflow-y-auto outline-none ${selectedItems.length ? "pb-14" : ""}`}
+      >
         {shown === 0 && !busy ? (
           <div className="flex h-full items-center justify-center px-4 text-center">
             <span className="font-mono text-[11px] text-ink-dim">{emptyText}</span>
           </div>
         ) : (
-          <table className={`w-full text-[13px] ${busy ? "opacity-60" : ""}`}>
+          <table
+            className={`w-full text-[13px] ${busy ? "opacity-60" : ""}`}
+            style={zoom !== 1 ? { zoom } : undefined}
+          >
             <thead className="sticky top-0 z-10 bg-bg-panel">
               <tr className="micro-label">
+                <th className="w-8 py-2 pl-3 pr-0">
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    ref={(el) => {
+                      if (el) el.indeterminate = selectedItems.length > 0 && !allSelected;
+                    }}
+                    onChange={toggleAll}
+                    aria-label="Select all"
+                    title="Select all (Ctrl+A)"
+                    className="block"
+                  />
+                </th>
                 <SortTh
                   label={view.sortKey === "type" ? "name · type" : "name"}
                   sortKey="name"
@@ -688,6 +1024,7 @@ export function FileBrowser({
                   onChange={setView}
                 />
                 <th className="px-3 py-2 text-left font-medium">owner</th>
+                <th className="px-3 py-2 text-left font-medium">perms</th>
                 <SortTh label="size" sortKey="size" prefs={view} onChange={setView} align="right" />
                 <SortTh
                   label="modified"
@@ -707,7 +1044,7 @@ export function FileBrowser({
                       group={g}
                       collapsed={collapsed.has(g.key)}
                       onToggle={() => toggleGroup(g.key)}
-                      colSpan={5}
+                      colSpan={7}
                     />
                     {!collapsed.has(g.key) && g.files.map(row)}
                   </Fragment>
@@ -720,6 +1057,79 @@ export function FileBrowser({
         )}
       </div>
 
+        {selectedItems.length > 0 && (
+          <div className="absolute bottom-3 left-1/2 z-20 flex max-w-[calc(100%-24px)] -translate-x-1/2 animate-fade-up items-center gap-1 rounded-lg border border-edge bg-bg-panel/95 py-1 pl-3 pr-1 shadow-[0_12px_32px_-8px_rgba(4,10,20,0.8)] backdrop-blur-sm">
+            <span className="mr-2 min-w-0 shrink truncate font-mono text-[11px] text-ink-mid">
+              <span className="text-ink-hi">{selectedItems.length} selected</span>
+              {" · "}
+              {[
+                selFiles ? `${selFiles} file${selFiles === 1 ? "" : "s"}` : "",
+                selDirs ? `${selDirs} folder${selDirs === 1 ? "" : "s"}` : "",
+              ]
+                .filter(Boolean)
+                .join(", ")}
+            </span>
+            {bulkRunning ? (
+              <button
+                onClick={() => (bulkStop.current = true)}
+                className={barBtn}
+                title="Stop after the file being copied now"
+              >
+                <Square size={12} />
+                Stop
+              </button>
+            ) : (
+              <>
+                <button
+                  onClick={downloadSelected}
+                  disabled={busy}
+                  className={barBtn}
+                  title="Download the selection — folders with everything inside"
+                >
+                  <Download size={13} />
+                  Download
+                </button>
+                <button
+                  onClick={() => setAction({ kind: "chmod", items: selectedItems })}
+                  disabled={busy}
+                  className={barBtn}
+                  title={isSftp ? "Change permissions (chmod)" : "Change permissions (SITE CHMOD)"}
+                >
+                  <Lock size={13} />
+                  Permissions
+                </button>
+                {isSftp && (
+                  <button
+                    onClick={openChown}
+                    disabled={busy}
+                    className={barBtn}
+                    title="Change owner and group (chown)"
+                  >
+                    <UserCog size={13} />
+                    Owner
+                  </button>
+                )}
+                <button
+                  onClick={openDelete}
+                  disabled={busy}
+                  className={`${barBtn} hover:!bg-err/15 hover:!text-err`}
+                  title="Delete the selection (Del)"
+                >
+                  <Trash2 size={13} />
+                  Delete
+                </button>
+              </>
+            )}
+            <button
+              onClick={() => setSelected(new Set())}
+              className="tb-btn shrink-0"
+              title="Clear selection (Esc)"
+            >
+              <X size={13} />
+            </button>
+          </div>
+        )}
+      </div>
       {transfer && (
         <div className="shrink-0 border-t border-edge bg-bg-panel">
           <TransferBar transfer={transfer} />
@@ -727,10 +1137,55 @@ export function FileBrowser({
       )}
 
       <div className="flex h-7 shrink-0 items-center gap-3 border-t border-edge bg-bg-panel px-3 font-mono text-[10.5px] text-ink-dim">
-        <span className="min-w-0 flex-1 truncate">{msg}</span>
+        <span className="min-w-0 flex-1 truncate" title={msg}>
+          {msg}
+        </span>
+        {zoom !== 1 && (
+          <button
+            onClick={() => applyZoom(1)}
+            className="shrink-0 rounded px-1 text-ink-mid transition hover:bg-bg-hover hover:text-ink-hi"
+            title="Zoom (Ctrl+scroll) — click or Ctrl+0 to reset"
+          >
+            {Math.round(zoom * 100)}%
+          </button>
+        )}
         <span className="shrink-0">{counts}</span>
       </div>
       </div>
+
+      {action?.kind === "delete" && (
+        <DeleteConfirm
+          items={action.items}
+          tree={action.tree}
+          error={action.error}
+          busy={actionBusy}
+          onConfirm={confirmDelete}
+          onCancel={() => !actionBusy && setAction(null)}
+        />
+      )}
+      {action?.kind === "chmod" && (
+        <ChmodDialog
+          items={action.items}
+          initial={
+            action.items.find((f) => f.mode != null)?.mode ??
+            (action.items.every((f) => f.isDir) ? 0o755 : 0o644)
+          }
+          ftp={!isSftp}
+          busy={actionBusy}
+          onApply={applyChmod}
+          onCancel={() => !actionBusy && setAction(null)}
+        />
+      )}
+      {action?.kind === "chown" && (
+        <ChownDialog
+          items={action.items}
+          users={action.users}
+          groups={action.groups}
+          busy={actionBusy}
+          onApply={applyChown}
+          onCancel={() => !actionBusy && setAction(null)}
+        />
+      )}
 
       {authError !== null && retryField && (
         <PasswordPrompt

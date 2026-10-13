@@ -84,6 +84,15 @@ browser.
   (`*` wildcards work), and **Enter searches every subfolder** on the server,
   streaming matches in with a stop button. The local pane in split view gets
   the same sort, group and filter; each pane remembers its own choice.
+- **Select and act in bulk** — tick files and folders in the SFTP/FTP browser
+  (checkboxes, click, Ctrl+click, Shift+click, Ctrl+A), then **download** them —
+  folders recreated on your disk — **delete** them (the warning counts what the
+  folders hold first; symlinks are never followed), change **permissions** (rwx
+  grid or octal, optionally into folders, which keep their execute bit) or, over
+  SFTP, change **owner and group** by name. FTP permissions go through
+  `SITE CHMOD`. A `perms` column shows each entry's rights.
+- **Ctrl+scroll zoom** — the terminal font, the file list and the VNC screen,
+  each remembered per connection; Ctrl+0 (or the zoom indicator) resets.
 - **Port forwarding, all three directions** — local (`ssh -L`), remote
   (`ssh -R`, the server listens for you) and dynamic (`ssh -D`, a built-in
   SOCKS5 proxy). Each forward runs on its own SSH connection and shows live

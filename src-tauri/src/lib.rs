@@ -2,6 +2,7 @@ mod clipboard;
 mod crypto;
 mod edit;
 mod effects;
+mod fileops;
 mod ftp;
 mod local;
 mod localfs;
@@ -73,6 +74,9 @@ pub struct RemoteFile {
     /// available — Windows SFTP servers, MLSD listings, local files.
     pub owner: Option<String>,
     pub group: Option<String>,
+    /// Permission bits (`0o755`, plus setuid/setgid/sticky), when the server
+    /// reports them — SFTP attributes, or a POSIX `LIST` line over FTP.
+    pub mode: Option<u32>,
 }
 
 /// A directory listing plus the path the server actually resolved it to, so
@@ -141,6 +145,7 @@ pub fn run() {
             local::local_open_admin,
             localfs::local_fs_home,
             localfs::local_fs_list,
+            localfs::local_mkdir,
             scp::scp_upload,
             scp::scp_download,
             sftp::sftp_connect,
@@ -148,11 +153,19 @@ pub fn run() {
             sftp::sftp_download,
             sftp::sftp_upload,
             sftp::sftp_disconnect,
+            sftp::sftp_tree,
+            sftp::sftp_delete,
+            sftp::sftp_chmod,
+            sftp::sftp_chown,
+            sftp::sftp_principals,
             ftp::ftp_connect,
             ftp::ftp_list,
             ftp::ftp_download,
             ftp::ftp_upload,
             ftp::ftp_disconnect,
+            ftp::ftp_tree,
+            ftp::ftp_delete,
+            ftp::ftp_chmod,
             logs::log_start,
             logs::log_stop,
             logs::save_text_file,

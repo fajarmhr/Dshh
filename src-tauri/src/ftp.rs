@@ -1,3 +1,6 @@
+use crate::fileops::{
+    chmod_targets, join, mode_for, parse_perm_string, OpReport, Target, Tree, TreeEntry,
+};
 use crate::progress::{Progress, Reporter};
 use crate::{next_id, AppState, Connection, Listing, RemoteFile};
 use std::io::{Read, Write};
@@ -97,41 +100,45 @@ pub async fn ftp_list(
     .await
     .map_err(|e| e.to_string())??;
 
+    let files = parse_listing(&dir, &lines).into_iter().map(|(f, _)| f).collect();
+    Ok(Listing { path: dir, files })
+}
+
+/// Parse `LIST` output for `dir`. Each entry comes with whether it is a
+/// symlink, which walks need and the listing itself doesn't show.
+fn parse_listing(dir: &str, lines: &[String]) -> Vec<(RemoteFile, bool)> {
     let mut out = Vec::new();
     for line in lines {
         #[allow(deprecated)]
-        let parsed = FtpFile::from_posix_line(&line);
+        let parsed = FtpFile::from_posix_line(line);
         if let Ok(f) = parsed {
             let name = f.name().to_string();
             if name == "." || name == ".." {
                 continue;
             }
-            let full = if dir.ends_with('/') {
-                format!("{dir}{name}")
-            } else {
-                format!("{dir}/{name}")
-            };
             let modified = f
                 .modified()
                 .duration_since(UNIX_EPOCH)
                 .ok()
                 .map(|d| d.as_secs() as i64);
-            let (owner, group) = posix_owner(&line);
-            out.push(RemoteFile {
-                name,
-                path: full,
-                is_dir: f.is_directory(),
-                size: f.size() as u64,
-                modified,
-                owner,
-                group,
-            });
+            let (owner, group) = posix_owner(line);
+            let perms = line.split_whitespace().next().unwrap_or("");
+            out.push((
+                RemoteFile {
+                    path: join(dir, &name),
+                    name,
+                    is_dir: f.is_directory(),
+                    size: f.size() as u64,
+                    modified,
+                    owner,
+                    group,
+                    mode: parse_perm_string(perms),
+                },
+                perms.starts_with('l'),
+            ));
         }
     }
-    Ok(Listing {
-        path: dir,
-        files: out,
-    })
+    out
 }
 
 #[tauri::command]
@@ -202,6 +209,120 @@ pub async fn ftp_upload(
     .map_err(|e| e.to_string())?
 }
 
+// ---- Bulk operations (multi-select) ----
+
+/// Walk the selection over one control connection. Symlinks (an `l` in the
+/// listing) are recorded but never descended into.
+fn walk(ftp: &mut FtpStream, targets: &[Target]) -> Result<Tree, String> {
+    let mut tree = Tree::from_targets(targets);
+    let mut stack: Vec<String> = targets
+        .iter()
+        .filter(|t| t.is_dir)
+        .map(|t| t.path.clone())
+        .collect();
+    while let Some(dir) = stack.pop() {
+        let Ok(lines) = ftp.list(Some(&dir)) else {
+            tree.unreadable.push(dir);
+            continue;
+        };
+        for (f, link) in parse_listing(&dir, &lines) {
+            let is_dir = f.is_dir && !link;
+            if is_dir {
+                stack.push(f.path.clone());
+            }
+            tree.push(TreeEntry {
+                path: f.path,
+                is_dir,
+                size: if is_dir { 0 } else { f.size },
+                link,
+            })?;
+        }
+    }
+    Ok(tree)
+}
+
+/// Run `op` against the session's control connection on a blocking thread.
+async fn with_ftp<T: Send + 'static>(
+    state: &AppState,
+    id: &str,
+    op: impl FnOnce(&mut FtpStream) -> Result<T, String> + Send + 'static,
+) -> Result<T, String> {
+    let arc = get_stream(state, id).await?;
+    tokio::task::spawn_blocking(move || {
+        let mut ftp = arc.lock().map_err(|e| e.to_string())?;
+        op(&mut ftp)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn ftp_tree(
+    id: String,
+    targets: Vec<Target>,
+    state: State<'_, AppState>,
+) -> Result<Tree, String> {
+    with_ftp(&state, &id, move |ftp| walk(ftp, &targets)).await
+}
+
+/// Delete the selection, folders with everything inside (FTP's RMD only
+/// removes empty ones, so the contents go first). Failures are reported, not
+/// fatal.
+#[tauri::command]
+pub async fn ftp_delete(
+    id: String,
+    targets: Vec<Target>,
+    state: State<'_, AppState>,
+) -> Result<OpReport, String> {
+    with_ftp(&state, &id, move |ftp| delete_tree(ftp, &targets)).await
+}
+
+fn delete_tree(ftp: &mut FtpStream, targets: &[Target]) -> Result<OpReport, String> {
+    let tree = walk(ftp, targets)?;
+    let mut report = OpReport::default();
+    for e in tree.delete_order() {
+        let result = if e.is_dir { ftp.rmdir(&e.path) } else { ftp.rm(&e.path) };
+        match result {
+            Ok(()) => report.ok(e.is_dir),
+            Err(err) => report.fail(&e.path, err),
+        }
+    }
+    Ok(report)
+}
+
+/// Permissions over FTP go through `SITE CHMOD`, which Unix servers (vsftpd,
+/// ProFTPD, Pure-FTPd) support. FTP has no way to change ownership.
+#[tauri::command]
+pub async fn ftp_chmod(
+    id: String,
+    targets: Vec<Target>,
+    mode: u32,
+    recursive: bool,
+    dir_exec: bool,
+    state: State<'_, AppState>,
+) -> Result<OpReport, String> {
+    with_ftp(&state, &id, move |ftp| chmod_tree(ftp, &targets, mode, recursive, dir_exec)).await
+}
+
+fn chmod_tree(
+    ftp: &mut FtpStream,
+    targets: &[Target],
+    mode: u32,
+    recursive: bool,
+    dir_exec: bool,
+) -> Result<OpReport, String> {
+    let tree = if recursive { walk(ftp, targets)? } else { Tree::from_targets(targets) };
+    let mut report = OpReport::default();
+    for e in chmod_targets(&tree, recursive, targets.len()) {
+        let m = mode_for(mode & 0o7777, e.is_dir, dir_exec);
+        match ftp.site(format!("CHMOD {m:o} {}", e.path)) {
+            Ok(_) => report.ok(e.is_dir),
+            Err(err) => report.fail(&e.path, err),
+        }
+    }
+    Ok(report)
+}
+
 #[tauri::command]
 pub async fn ftp_disconnect(id: String, state: State<'_, AppState>) -> Result<(), String> {
     if let Some(c) = state.ftp.lock().await.remove(&id) {
@@ -214,4 +335,44 @@ pub async fn ftp_disconnect(id: String, state: State<'_, AppState>) -> Result<()
         .await;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn modes(ftp: &mut FtpStream, dir: &str) -> Vec<(String, Option<u32>)> {
+        let lines = ftp.list(Some(dir)).unwrap();
+        parse_listing(dir, &lines).into_iter().map(|(f, _)| (f.name, f.mode)).collect()
+    }
+
+    /// Live: needs a writable FTP server on 127.0.0.1:2121 (pyftpdlib,
+    /// test/test123). Walks, chmods via SITE CHMOD, and deletes a tree.
+    #[test]
+    #[ignore]
+    fn ftp_live_bulk_operations() {
+        let mut ftp = FtpStream::connect("127.0.0.1:2121").expect("connect");
+        ftp.login("test", "test123").expect("login");
+        let base = format!("/dshh-bulk-{}", std::process::id());
+        ftp.mkdir(&base).unwrap();
+        ftp.mkdir(format!("{base}/sub")).unwrap();
+        ftp.put_file(format!("{base}/a.txt"), &mut std::io::Cursor::new(b"a")).unwrap();
+        ftp.put_file(format!("{base}/sub/b.txt"), &mut std::io::Cursor::new(b"b")).unwrap();
+
+        let targets = vec![Target { path: base.clone(), is_dir: true, size: 0 }];
+        let tree = walk(&mut ftp, &targets).unwrap();
+        assert_eq!(tree.entries.len(), 4, "{:?}", tree.entries);
+
+        let r = chmod_tree(&mut ftp, &targets, 0o640, true, true).unwrap();
+        assert_eq!(r.failed, 0, "{:?}", r.errors);
+        let inside = modes(&mut ftp, &base);
+        assert!(inside.contains(&("a.txt".into(), Some(0o640))), "{inside:?}");
+        assert!(inside.contains(&("sub".into(), Some(0o750))), "{inside:?}");
+
+        let r = delete_tree(&mut ftp, &targets).unwrap();
+        assert_eq!(r.failed, 0, "{:?}", r.errors);
+        assert_eq!((r.files, r.dirs), (2, 2));
+        let root = ftp.list(Some("/")).unwrap().join("\n");
+        assert!(!root.contains(base.trim_start_matches('/')), "{root}");
+    }
 }

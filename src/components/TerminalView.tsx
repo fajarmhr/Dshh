@@ -56,7 +56,9 @@ import { PasswordPrompt } from "./PasswordPrompt";
 import { TunnelsModal } from "./TunnelsModal";
 import { ScpModal } from "./ScpModal";
 import type { Connection, Session } from "../lib/types";
+import { useSaveConnectionPref, wheelSteps } from "../lib/zoom";
 import {
+  clamp,
   cn,
   formatClock,
   formatDuration,
@@ -65,6 +67,10 @@ import {
   splitPasteLines,
   timestamp,
 } from "../lib/utils";
+
+/** Font sizes Ctrl+scroll zooms between — the connection dialog's range. */
+const FONT_MIN = 8;
+const FONT_MAX = 28;
 
 const SEARCH_DECORATIONS = {
   matchBackground: "#33415e",
@@ -144,12 +150,21 @@ export function TerminalView({
     [liveConn.tunnels, activeTunnels]
   );
 
+  /**
+   * Font size from Ctrl+scroll, shown at once while the save to the
+   * connection waits for the wheel to settle. Cleared when the saved value
+   * changes, so an edit in the connection dialog still wins.
+   */
+  const [zoomFont, setZoomFont] = useState<number | null>(null);
+  const saveZoom = useSaveConnectionPref(conn.id);
+  useEffect(() => setZoomFont(null), [liveConn.fontSize]);
+
   // Terminal look, with per-connection overrides winning over the global
   // preference — that is what lets one host be marked out with its own palette.
   const appearance = useMemo(
     () => ({
       fontFamily: settings.fontFamily,
-      fontSize: liveConn.fontSize ?? settings.fontSize,
+      fontSize: zoomFont ?? liveConn.fontSize ?? settings.fontSize,
       lineHeight: settings.lineHeight,
       cursorStyle: settings.cursorStyle,
       cursorBlink: settings.cursorBlink,
@@ -164,10 +179,30 @@ export function TerminalView({
       settings.cursorBlink,
       settings.scrollback,
       settings.themeId,
+      zoomFont,
       liveConn.fontSize,
       liveConn.themeId,
     ]
   );
+
+  /**
+   * Ctrl+scroll zoom: the connection's own font size, saved once the wheel
+   * settles. `null` resets to the global size (Ctrl+0).
+   */
+  const zoomTo = (size: number | null) => {
+    if (size === null) {
+      setZoomFont(liveConn.fontSize === undefined ? null : settingsRef.current.fontSize);
+      saveZoom({ fontSize: undefined });
+      setNote(`Font ${settingsRef.current.fontSize}px (global)`);
+      return;
+    }
+    const next = clamp(size, FONT_MIN, FONT_MAX, settingsRef.current.fontSize);
+    setZoomFont(next);
+    saveZoom({ fontSize: next === settingsRef.current.fontSize ? undefined : next });
+    setNote(`Font ${next}px · Ctrl+0 resets`);
+  };
+  const zoomToRef = useRef(zoomTo);
+  zoomToRef.current = zoomTo;
   // Read by the mount effect, which must not re-run when appearance changes —
   // rebuilding the Terminal would drop the scrollback and the live connection.
   const appearanceRef = useRef(appearance);
@@ -571,7 +606,21 @@ export function TerminalView({
         setSearchOpen(true);
         return false;
       }
+      if (e.type === "keydown" && e.ctrlKey && !e.shiftKey && !e.altKey && e.key === "0") {
+        zoomToRef.current(null);
+        return false;
+      }
       return true;
+    });
+
+    // Ctrl+scroll zooms instead of scrolling the buffer.
+    const wheelAcc = { v: 0 };
+    term.attachCustomWheelEventHandler((e) => {
+      if (!e.ctrlKey) return true;
+      e.preventDefault();
+      const steps = wheelSteps(wheelAcc, e);
+      if (steps) zoomToRef.current(term.options.fontSize! + steps);
+      return false;
     });
 
     // Variable fonts can land after the first fit and change the cell metrics

@@ -262,6 +262,11 @@ interface AppState {
 
   addConnection: (c: Omit<Connection, "id">) => Connection;
   updateConnection: (id: string, patch: Partial<Connection>) => void;
+  /**
+   * Remember a view preference (zoom) on a connection: persisted for a saved
+   * one, kept in memory for a transient tab such as a pasted console link.
+   */
+  setConnectionPrefs: (id: string, patch: Partial<Connection>) => void;
   removeConnection: (id: string) => void;
   duplicateConnection: (id: string) => Connection | undefined;
 
@@ -330,6 +335,18 @@ export const useStore = create<AppState>((set, get) => ({
     );
     set({ connections });
     persistAll(connections);
+  },
+
+  setConnectionPrefs: (id, patch) => {
+    if (get().connections.some((c) => c.id === id)) {
+      get().updateConnection(id, patch);
+      return;
+    }
+    set({
+      transientConnections: get().transientConnections.map((c) =>
+        c.id === id ? { ...c, ...patch } : c
+      ),
+    });
   },
 
   removeConnection: (id) => {

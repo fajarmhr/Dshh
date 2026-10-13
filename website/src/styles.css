@@ -79,6 +79,8 @@ a { color: inherit; text-decoration: none; }
 .clog-d { margin-top:4px; font-family:'JetBrains Mono',monospace; font-size:11px; color:#5a6878; }
 .clog-body { flex:1 1 320px; min-width:0; }
 .clog-h { font-size:16.5px; font-weight:600; color:#e3eaf3; }
+/* Home-page card for the latest release; the full list is on changelog.html. */
+.teaser { display:flex; flex-wrap:wrap; gap:20px; margin-top:40px; border:1px solid #1c2531; border-radius:14px; background:#0d121a; padding:28px; }
 .clog-ul { margin:12px 0 0; padding:0 0 0 18px; display:flex; flex-direction:column; gap:6px; font-size:14px; line-height:1.65; color:#93a1b3; }
 
 .kbd { border:1px solid #2a3646; border-radius:5px; background:#131a24; padding:3px 8px; text-align:center; font-family:'JetBrains Mono',monospace; font-size:10.5px; color:#e3eaf3; }

@@ -199,6 +199,68 @@ export const sftpUpload = (
 ) => invoke("sftp_upload", { id, local, remote, onProgress: progressChannel(onProgress) });
 export const sftpDisconnect = (id: string) => invoke("sftp_disconnect", { id });
 
+// ---- Bulk file operations (multi-select in the file browser) ----
+/** A selected entry, as the listing described it. */
+export interface FileTarget {
+  path: string;
+  isDir: boolean;
+  size?: number;
+}
+export interface TreeEntry {
+  path: string;
+  isDir: boolean;
+  size: number;
+  /** Symlink: never descended into. */
+  link: boolean;
+}
+/** Everything under a selection, selection first. */
+export interface FileTree {
+  entries: TreeEntry[];
+  /** Folders that couldn't be listed (permissions), so weren't walked. */
+  unreadable: string[];
+}
+export interface OpReport {
+  files: number;
+  dirs: number;
+  failed: number;
+  /** The first few failures, as "path: reason". */
+  errors: string[];
+}
+export const sftpTree = (id: string, targets: FileTarget[]) =>
+  invoke<FileTree>("sftp_tree", { id, targets });
+export const sftpDelete = (id: string, targets: FileTarget[]) =>
+  invoke<OpReport>("sftp_delete", { id, targets });
+export const sftpChmod = (
+  id: string,
+  targets: FileTarget[],
+  mode: number,
+  recursive: boolean,
+  dirExec: boolean
+) => invoke<OpReport>("sftp_chmod", { id, targets, mode, recursive, dirExec });
+export const sftpChown = (
+  id: string,
+  targets: FileTarget[],
+  owner: string | null,
+  group: string | null,
+  recursive: boolean
+) => invoke<OpReport>("sftp_chown", { id, targets, owner, group, recursive });
+/** User and group names known on the server. */
+export const sftpPrincipals = (id: string) =>
+  invoke<{ users: string[]; groups: string[] }>("sftp_principals", { id });
+export const ftpTree = (id: string, targets: FileTarget[]) =>
+  invoke<FileTree>("ftp_tree", { id, targets });
+export const ftpDelete = (id: string, targets: FileTarget[]) =>
+  invoke<OpReport>("ftp_delete", { id, targets });
+/** `SITE CHMOD` — FTP has no ownership command. */
+export const ftpChmod = (
+  id: string,
+  targets: FileTarget[],
+  mode: number,
+  recursive: boolean,
+  dirExec: boolean
+) => invoke<OpReport>("ftp_chmod", { id, targets, mode, recursive, dirExec });
+export const localMkdir = (path: string) => invoke("local_mkdir", { path });
+
 // ---- FTP ----
 export const ftpConnect = (conn: Connection) => invoke<string>("ftp_connect", { conn });
 export const ftpList = (id: string, path: string) =>

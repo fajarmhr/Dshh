@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   ClipboardType,
   Eye,
@@ -29,8 +29,12 @@ import { PasteConfirm } from "./PasteConfirm";
 import { ConsoleTokenPrompt } from "./ConsoleLinkModal";
 import type { Connection, Session } from "../lib/types";
 import { cn, formatDuration, isAuthFailure, splitPasteLines } from "../lib/utils";
+import { useSaveConnectionPref, wheelSteps } from "../lib/zoom";
 
-const FIT_KEY = "dshh.vncFit";
+/** Ctrl+scroll zoom range and step (each notch is ×1.1). */
+const SCALE_MIN = 0.1;
+const SCALE_MAX = 4;
+const SCALE_STEP = 1.1;
 /** Wheel travel (px) per scroll click sent to the server: one mouse notch. */
 const WHEEL_STEP = 100;
 
@@ -41,14 +45,6 @@ const PKT_COPY = 4;
 
 /** DOM `buttons` (left 1, right 2, middle 4) → RFB mask (left 1, middle 2, right 4). */
 const rfbButtons = (b: number) => (b & 1) | (b & 4 ? 2 : 0) | (b & 2 ? 4 : 0);
-
-function readFitPref(): boolean {
-  try {
-    return localStorage.getItem(FIT_KEY) !== "actual";
-  } catch {
-    return true;
-  }
-}
 
 /**
  * A VNC session tab: the remote screen on a canvas, with keyboard and mouse
@@ -85,8 +81,19 @@ export function VncView({ session, conn }: { session: Session; conn: Connection 
 
   const [fb, setFb] = useState({ w: 0, h: 0 });
   const [hello, setHello] = useState<VncHello | null>(null);
-  const [fit, setFit] = useState(readFitPref);
-  const [scale, setScale] = useState(1);
+  /**
+   * Zoom set with Ctrl+scroll or the 1:1 button, remembered on the
+   * connection; `null` scales the screen to fit the tab.
+   */
+  const [manualScale, setManualScale] = useState<number | null>(conn.vncScale ?? null);
+  const fit = manualScale === null;
+  const saveScale = useSaveConnectionPref(conn.id);
+  const [fitScale, setFitScale] = useState(1);
+  const scale = manualScale ?? fitScale;
+  const scaleRef = useRef(scale);
+  scaleRef.current = scale;
+  /** Framebuffer point to keep under the pointer across a wheel zoom. */
+  const anchorRef = useRef<{ fx: number; fy: number; cx: number; cy: number } | null>(null);
   const [viewOnly, setViewOnly] = useState(false);
   const [cursor, setCursor] = useState("default");
   const [note, setNote] = useState("");
@@ -288,8 +295,22 @@ export function VncView({ session, conn }: { session: Session; conn: Connection 
 
     // Native listener: React's wheel handler is passive, so it can't stop the
     // page scrolling.
+    const zoomAcc = { v: 0 };
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
+      if (e.ctrlKey) {
+        const steps = wheelSteps(zoomAcc, e);
+        if (!steps || !fbRef.current.w) return;
+        const r = canvas.getBoundingClientRect();
+        anchorRef.current = {
+          fx: (e.clientX - r.left) / scaleRef.current,
+          fy: (e.clientY - r.top) / scaleRef.current,
+          cx: e.clientX,
+          cy: e.clientY,
+        };
+        setZoomRef.current(scaleRef.current * SCALE_STEP ** steps);
+        return;
+      }
       const id = backendId.current;
       if (!id || viewOnlyRef.current) return;
       const unit = e.deltaMode === 1 ? 40 : e.deltaMode === 2 ? 800 : 1;
@@ -324,35 +345,48 @@ export function VncView({ session, conn }: { session: Session; conn: Connection 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Scale to fit the pane (both up and down), or show 1:1 and scroll.
+  // The scale that fits the pane (both up and down), tracked even while a
+  // manual zoom is showing so switching back to Fit is instant.
   useEffect(() => {
     const wrap = wrapRef.current;
     if (!wrap) return;
     const update = () => {
       const { w, h } = fbRef.current;
-      if (!fit || !w || !h) {
-        setScale(1);
-        return;
-      }
       // A hidden tab measures 0×0; keep the last scale until it shows again.
-      if (!wrap.clientWidth || !wrap.clientHeight) return;
-      setScale(Math.min(wrap.clientWidth / w, wrap.clientHeight / h));
+      if (!w || !h || !wrap.clientWidth || !wrap.clientHeight) return;
+      setFitScale(Math.min(wrap.clientWidth / w, wrap.clientHeight / h));
     };
     update();
     const ro = new ResizeObserver(update);
     ro.observe(wrap);
     return () => ro.disconnect();
-  }, [fit, fb]);
+  }, [fb]);
 
-  const toggleFit = () => {
-    const next = !fit;
-    setFit(next);
-    try {
-      localStorage.setItem(FIT_KEY, next ? "fit" : "actual");
-    } catch {
-      /* per-viewer nicety only */
-    }
+  /** Set a manual zoom (null = fit) and remember it on the connection. */
+  const setZoom = (next: number | null) => {
+    const value =
+      next === null ? null : Math.min(SCALE_MAX, Math.max(SCALE_MIN, Math.round(next * 100) / 100));
+    setManualScale(value);
+    saveScale({ vncScale: value ?? undefined });
   };
+  const setZoomRef = useRef(setZoom);
+  setZoomRef.current = setZoom;
+
+  // Keep the point that was under the pointer there after a wheel zoom, by
+  // scrolling the pane once the new size has laid out.
+  useLayoutEffect(() => {
+    const a = anchorRef.current;
+    const canvas = canvasRef.current;
+    const wrap = wrapRef.current;
+    anchorRef.current = null;
+    if (!a || !canvas || !wrap) return;
+    const r = canvas.getBoundingClientRect();
+    wrap.scrollLeft += r.left + a.fx * scale - a.cx;
+    wrap.scrollTop += r.top + a.fy * scale - a.cy;
+  }, [scale]);
+
+  /** Fit ↔ the zoom in use; from Fit it goes to 1:1. */
+  const toggleFit = () => setZoom(fit ? 1 : null);
 
   /** Client coordinates → framebuffer pixel, clamped to the screen. */
   const toFb = (clientX: number, clientY: number) => {
@@ -588,10 +622,14 @@ export function VncView({ session, conn }: { session: Session; conn: Connection 
           <button
             onClick={toggleFit}
             className={toolBtn}
-            title={fit ? "Show at actual size (scroll to pan)" : "Scale the screen to fit the tab"}
+            title={
+              fit
+                ? "Scaled to fit · click for actual size · Ctrl+scroll to zoom"
+                : "Zoomed · click to fit the tab · Ctrl+scroll to zoom"
+            }
           >
             {fit ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
-            {fit ? "Fit" : "1:1"}
+            {fit ? "Fit" : `${Math.round(scale * 100)}%`}
           </button>
           <button
             onClick={toggleViewOnly}
@@ -669,7 +707,7 @@ export function VncView({ session, conn }: { session: Session; conn: Connection 
             {fb.w > 0 && (
               <span title="Remote screen size">
                 {fb.w}×{fb.h}
-                {fit && Math.abs(scale - 1) > 0.01 ? ` · ${Math.round(scale * 100)}%` : ""}
+                {Math.abs(scale - 1) > 0.01 ? ` · ${Math.round(scale * 100)}%` : ""}
               </span>
             )}
             {hello && (

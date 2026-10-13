@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Changelog — Dshh</title>
+<meta name="description" content="Every Dshh release and what changed in it.">
+<link rel="icon" type="image/png" href="/favicon-32.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/src/styles.css">
+</head>
+<body>
+<div style="min-height:100vh;background:#0a0e14;color:#e3eaf3;">
+
+  <!-- NAV -->
+  <div style="position:sticky;top:0;z-index:50;background:rgba(10,14,20,0.88);backdrop-filter:blur(12px);border-bottom:1px solid #131a24;">
+    <div style="max-width:1200px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:0 24px;height:64px;">
+      <a href="./" style="display:flex;align-items:center;gap:10px;">
+        <div class="logo-badge">&gt;_</div>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:600;letter-spacing:0.08em;color:#e3eaf3;">dshh</span>
+      </a>
+      <div class="desktop-nav" style="display:flex;align-items:center;gap:26px;font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:0.15em;">
+        <a href="./#dsh-features" class="navlink"><span class="nav-dot"></span>features</a>
+        <a href="./#dsh-download" class="navlink"><span class="nav-dot"></span>download</a>
+        <a href="changelog.html" class="navlink active" aria-current="page"><span class="nav-dot"></span>changelog</a>
+        <a href="./#dsh-docs" class="navlink"><span class="nav-dot"></span>docs</a>
+      </div>
+      <div class="desktop-nav" style="display:flex;align-items:center;gap:10px;">
+        <a href="https://github.com/fajarmhr/Dshh" target="_blank" rel="noopener" class="btn-ghost">GitHub ↗</a>
+        <a data-download href="https://github.com/fajarmhr/Dshh/releases/latest" class="btn-primary">↓ Download</a>
+      </div>
+      <span data-menu-toggle class="menu-btn" style="display:none;width:38px;height:38px;align-items:center;justify-content:center;border:1px solid #2a3646;border-radius:8px;font-size:15px;color:#93a1b3;cursor:pointer;">≡</span>
+    </div>
+    <div data-mobile-menu class="mobile-menu" style="display:none;border-top:1px solid #131a24;background:#0d121a;padding:12px 24px 18px;flex-direction:column;gap:4px;">
+      <a href="./#dsh-features" class="m-link">features</a>
+      <a href="./#dsh-download" class="m-link">download</a>
+      <a href="changelog.html" class="m-link">changelog</a>
+      <a href="./#dsh-docs" class="m-link">docs</a>
+      <a data-download href="https://github.com/fajarmhr/Dshh/releases/latest" style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:10px;background:#5b8cff;border-radius:8px;padding:13px 16px;font-size:14px;font-weight:500;color:#fff;">↓ Download for Windows</a>
+    </div>
+  </div>
+
+  <!-- CHANGELOG -->
+  <div id="dsh-changelog">
+    <div style="max-width:1200px;margin:0 auto;padding:84px 24px;">
+      <a href="./" class="eyebrow" style="display:inline-block;">&larr; dshh</a>
+      <h1 class="h2">Release history</h1>
+      <p style="margin-top:12px;max-width:640px;font-size:15px;line-height:1.65;color:#93a1b3;">Every release, newest first. Each one ships as a portable zip on <a href="https://github.com/fajarmhr/Dshh/releases" target="_blank" rel="noopener" style="color:#7ca4ff;">GitHub</a> &mdash; and the app updates itself.</p>
+      <!-- Rendered live from the GitHub Releases API by main.ts; the entries
+           below are the static fallback shown when the API is unreachable. -->
+      <div data-changelog>
+      <div class="clog">
+        <div class="clog-v"><div style="display:flex;align-items:center;gap:8px;"><span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:#5b8cff;">v1.3.0</span><span style="border-radius:5px;background:rgba(62,207,142,0.1);padding:1px 7px;font-family:'JetBrains Mono',monospace;font-size:10px;color:#3ecf8e;">latest</span></div><div class="clog-d">oct 2026</div></div>
+        <div class="clog-body"><div class="clog-h">VNC remote desktop, bulk file actions and Ctrl+scroll zoom</div>
+          <ul class="clog-ul">
+            <li>A new VNC tab shows the remote screen with keyboard, mouse and clipboard, scaled to fit or at 1:1, plus view-only and a Ctrl+Alt+Del button. Like every other protocol it runs inside dshh.exe &mdash; no viewer to install</li>
+            <li>Logs in with a VNC password, VeNCrypt over X509 TLS (with a username and password where the server wants one) or Apple Remote Desktop for macOS Screen Sharing. A rejected password asks again instead of leaving a dead tab</li>
+            <li>Paste an OpenStack or Huawei FusionSphere console link (vnc_auto.html?token=&hellip;) and the VM's console opens straight in Dshh. Save the console proxy as a connection and only the short-lived token is asked for each time; its host can be picked from a saved SSH session</li>
+            <li>Route any VNC connection through a saved SSH session, so the unencrypted VNC stream never crosses the network bare</li>
+            <li>Type clipboard keys text into consoles that have no clipboard &mdash; BIOS screens, KVM consoles, login prompts. On QEMU/KVM it sends physical key codes, so the guest's own keyboard layout applies</li>
+            <li>Select files and folders in the SFTP and FTP browser &mdash; checkboxes, click, Ctrl+click, Shift+click or Ctrl+A &mdash; then download, delete, change permissions or change owner in one go. Folders come with everything inside, and a folder download recreates the tree on your disk</li>
+            <li>Delete asks first and counts what the selected folders hold before the button arms. Symlinks are never followed, so a link can't drag something outside the selection along</li>
+            <li>Permissions as an rwx grid or octal, optionally into folders &mdash; with folders kept openable when you apply something like 644. SFTP also changes owner and group by name; FTP uses SITE CHMOD. A new perms column shows each entry's rights</li>
+            <li>Ctrl+scroll zooms the terminal font, the file list and the VNC screen. Each connection remembers its own zoom; Ctrl+0 resets</li>
+          </ul>
+        </div>
+      </div>
+      <div class="clog">
+        <div class="clog-v"><span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:#5b8cff;">v1.2.0</span><div class="clog-d">sep 2026</div></div>
+        <div class="clog-body"><div class="clog-h">Sort, group and search the file browser</div>
+          <ul class="clog-ul">
+            <li>Sort SFTP and FTP listings by name, type, size or date &mdash; click a column header, or pick from the new sort menu. Names sort naturally, so file2 comes before file10</li>
+            <li>Group a folder by type (code, images, archives&hellip;), by date (today, yesterday, last 7 days&hellip;) or by Explorer-style size bands. Groups fold away with a click</li>
+            <li>A filter box narrows the folder as you type, with * wildcards. Press Enter and it searches every subfolder on the server instead, streaming matches in with a stop button; each result shows where it lives and jumps to its folder</li>
+            <li>The local pane in split view gets the same sort, group and filter, and each pane remembers its own choice between sessions</li>
+          </ul>
+        </div>
+      </div>
+      <div class="clog">
+        <div class="clog-v"><span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:#5b8cff;">v1.1.3</span><div class="clog-d">sep 2026</div></div>
+        <div class="clog-body"><div class="clog-h">Corrected credentials are kept by default</div>
+          <ul class="clog-ul">
+            <li>A password typed into the auth-failure prompt is now saved to the session by default, with no checkbox to tick each time &mdash; being asked at all means what was stored is wrong or missing. Settings &rsaquo; General turns the write off if you would rather each retry be one-time</li>
+            <li>A session saved without a username asks for one alongside the password, and keeps both</li>
+            <li>The connect banner drops its Dshh masthead and starts at the session line, so the box is three lines shorter</li>
+          </ul>
+        </div>
+      </div>
+      <div class="clog">
+        <div class="clog-v"><span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:#5b8cff;">v1.1.2</span><div class="clog-d">sep 2026</div></div>
+        <div class="clog-body"><div class="clog-h">Retry a wrong password, colour on connect</div>
+          <ul class="clog-ul">
+            <li>A saved session whose password the server rejects now asks for it again instead of leaving a dead tab. Type the right one and it connects, and the corrected password is written back to the saved session &mdash; but only after the server accepts it, so a second wrong guess never overwrites a working one. Covers SSH, SFTP and FTP, and asks for the key passphrase where that is what failed</li>
+            <li>A MobaXterm-style connect banner: a coloured box at the top of each session with the target, port, auth method, jump host, saved forwards and login command. It scrolls away with the session and lands in the log</li>
+            <li>The terminal status bar is drawn as coloured segments &mdash; green connected, amber connecting, red on error &mdash; with a clock alongside the uptime, grid and encoding</li>
+            <li>The accent colour set on a connection now tints that session's toolbar and status bar, so prod doesn't look like staging</li>
+            <li>All three are on by default and switch off individually in Settings &rsaquo; General</li>
+          </ul>
+        </div>
+      </div>
+      <div class="clog">
+        <div class="clog-v"><span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:#5b8cff;">v1.1.1</span><div class="clog-d">aug 2026</div></div>
+        <div class="clog-body"><div class="clog-h">Reorder quick commands and macros</div>
+          <ul class="clog-ul">
+            <li>Quick commands can be reordered — drag a row by its grip in the manage dialog and the chips above the compose bar follow that order, so the ones you actually use sit where your eye lands</li>
+            <li>Macros get the same handle, reordered the same way</li>
+            <li>Both lists also move with the keyboard: focus a grip and press the up or down arrow, which beats dragging inside a scrolling dialog</li>
+          </ul>
+        </div>
+      </div>
+      <div class="clog">
+        <div class="clog-v"><span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:#5b8cff;">v1.1.0</span><div class="clog-d">aug 2026</div></div>
+        <div class="clog-body"><div class="clog-h">Paste guard, transfer progress, file owners</div>
+          <ul class="clog-ul">
+            <li>Pasting two or more lines now asks first, listing the exact numbered lines that would run — every newline is an Enter to the shell, so a stray copy used to execute commands with no warning. Covers Ctrl+V, Ctrl+Shift+V, Shift+Insert and right-click paste; switch it off in Settings &rsaquo; Terminal</li>
+            <li>Uploads and downloads show a real progress bar with bytes moved, percentage and position in a multi-file batch, in the SFTP/FTP browser and the SCP dialog. Servers that won't report a size get an indeterminate bar rather than a fake percentage</li>
+            <li>The file browser has an owner column. SFTP resolves numeric uids against the server's own /etc/passwd, so you see root and www-data rather than 0 and 33; FTP reads the names straight out of its listing</li>
+          </ul>
+        </div>
+      </div>
+      <div class="clog">
+        <div class="clog-v"><span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:#5b8cff;">v1.0.1</span><div class="clog-d">aug 2026</div></div>
+        <div class="clog-body"><div class="clog-h">Right-click copy and paste</div>
+          <ul class="clog-ul">
+            <li>Right-clicking the terminal now pastes the clipboard. Select text first and the same right-click copies it instead — so select, right-click, right-click again copies a line and pastes it back without touching the keyboard</li>
+            <li>Fixed: a quick command typed into the new-row fields is saved when you press Done, instead of being discarded unless you started a second one</li>
+          </ul>
+        </div>
+      </div>
+      <div class="clog">
+        <div class="clog-v"><span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:#5b8cff;">v1.0.0</span><div class="clog-d">jul 2026</div></div>
+        <div class="clog-body"><div class="clog-h">1.0 — forwarding in every direction, macros, agent auth</div>
+          <ul class="clog-ul">
+            <li>Port forwarding now covers all three OpenSSH directions: local (-L), remote (-R, where the server listens on your behalf) and dynamic (-D), which runs a built-in SOCKS5 proxy</li>
+            <li>Every running forward shows live byte counters and an indicator that flashes on real traffic, so you can tell an idle tunnel from a busy one</li>
+            <li>SSH agent authentication — the private key never enters Dshh. Uses the Windows OpenSSH agent service, falling back to Pageant</li>
+            <li>Macros: record the commands you type in a terminal, name them, and replay the sequence into any session from the bottom dock</li>
+            <li>Optional terminal status bar with the target, time connected, grid size and encoding, plus indicators for logging, macro recording and running forwards</li>
+            <li>Optional Windows 11 Mica or acrylic backdrop behind the app chrome. The terminal itself stays opaque</li>
+            <li>Tabs carry a per-protocol icon, so a long row of sessions is scannable without reading labels</li>
+            <li>Settings is now organised into four tabs — General, Terminal, Output &amp; logs, Security — instead of one long scroll</li>
+            <li>Font and line height are dropdowns rather than free text. The font list shows only the monospace faces actually installed on your machine, each rendered in its own face</li>
+            <li>Session logs default to a logs folder inside the portable data folder, so they travel with the app and auto-logging works without picking a folder first</li>
+            <li>The portable download is now a folder — dshh.exe beside its own data/ — so settings and saved connections travel with it to another machine or a USB stick</li>
+            <li>Upgrading from a non-portable build carries your existing settings and saved connections across on first run, leaving the originals untouched</li>
+          </ul>
+        </div>
+      </div>
+      <div class="clog">
+        <div class="clog-v"><span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:#5b8cff;">v0.5.3</span><div class="clog-d">jul 2026</div></div>
+        <div class="clog-body"><div class="clog-h">Type a path to jump there</div>
+          <ul class="clog-ul">
+            <li>The file-browser address bar is now editable — type a directory and press Enter instead of clicking down one level at a time. Works on both the remote and local panes</li>
+            <li>SFTP sessions show the real starting directory (e.g. /home/you) instead of a bare "."</li>
+          </ul>
+        </div>
+      </div>
+      <div class="clog">
+        <div class="clog-v"><span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:#5b8cff;">v0.5.2</span><div class="clog-d">jul 2026</div></div>
+        <div class="clog-body"><div class="clog-h">Transfer &amp; dialog fixes</div>
+          <ul class="clog-ul">
+            <li>Fixed: SFTP/FTP uploads keep the file's exact name and extension — the local folder path is no longer part of the uploaded filename</li>
+            <li>Fixed: the connection editor and other dialogs no longer close when a text selection started inside a field ends outside the box</li>
+          </ul>
+        </div>
+      </div>
+      <div class="clog">
+        <div class="clog-v"><span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:#5b8cff;">v0.5.1</span><div class="clog-d">jul 2026</div></div>
+        <div class="clog-body"><div class="clog-h">Readable session logs &amp; more terminal color</div>
+          <ul class="clog-ul">
+            <li>Recorded session logs are now clean, readable text — colour codes stripped, backspace / delete / progress-bar rewrites applied, proper UTF-8</li>
+            <li>Telnet sessions can record logs too</li>
+            <li>Richer terminal palette and more built-in highlight keywords (fatal, refused, timeout, completed, listening, …)</li>
+          </ul>
+        </div>
+      </div>
+      <div class="clog">
+        <div class="clog-v"><span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:#5b8cff;">v0.5.0</span><div class="clog-d">jul 2026</div></div>
+        <div class="clog-body"><div class="clog-h">File browser overhaul &amp; zip downloads</div>
+          <ul class="clog-ul">
+            <li>Dual-pane split view — local disk next to the remote listing, drag &amp; drop both ways to upload / download</li>
+            <li>File-type icons in the SFTP/FTP browser</li>
+            <li>Fixed: downloads keep the original file type in the save dialog; folders no longer render as plain files</li>
+            <li>The portable build now ships as Dshh-portable.zip</li>
+          </ul>
+        </div>
+      </div>
+      <div class="clog">
+        <div class="clog-v"><span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:#5b8cff;">v0.4.0</span><div class="clog-d">jul 2026</div></div>
+        <div class="clog-body"><div class="clog-h">Telnet, jump hosts, multi-exec &amp; self-update</div>
+          <ul class="clog-ul">
+            <li>Telnet sessions and one-hop SSH jump hosts (bastion)</li>
+            <li>Multi-exec — broadcast typed input to several SSH tabs at once</li>
+            <li>Drag &amp; drop upload into the file browser; edit remote files in your local editor with auto re-upload</li>
+            <li>Optional master-password encryption for saved credentials</li>
+            <li>In-app self-update from GitHub Releases; SCP tilde/quote fixes</li>
+          </ul>
+        </div>
+      </div>
+      <div class="clog">
+        <div class="clog-v"><span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:#5b8cff;">v0.2.0</span><div class="clog-d">jul 2026</div></div>
+        <div class="clog-body"><div class="clog-h">Local terminal, SCP &amp; a terminal fix</div>
+          <ul class="clog-ul">
+            <li>Local terminal — cmd &amp; PowerShell in a tab (portable-pty / ConPTY); Run-as-Admin opens elevated in its own window</li>
+            <li>SCP file transfer over the SSH channel (upload / download), for hosts with SFTP disabled</li>
+            <li>Fixed a PTY width desync that smeared line editing (arrows, history) after the font loaded</li>
+          </ul>
+        </div>
+      </div>
+      <div class="clog">
+        <div class="clog-v"><span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:#5b8cff;">v0.1.0</span><div class="clog-d">jul 2026</div></div>
+        <div class="clog-body"><div class="clog-h">Initial release</div>
+          <ul class="clog-ul">
+            <li>SSH, SFTP, FTP and serial — all in-process (russh · russh-sftp · suppaftp · serialport)</li>
+            <li>Tabbed workspace with split pane; terminals survive tab switches</li>
+            <li>Saved connection profiles with groups</li>
+            <li>Quick command chips, Ctrl+K compose bar, broadcast to all connected hosts</li>
+            <li>Buffer search (Ctrl+F), session logging, ANSI highlight rules, SSH port forwarding</li>
+          </ul>
+        </div>
+      </div>
+      </div>
+      <div class="clog"><div class="clog-v" style="color:#5a6878;font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;">unreleased</div><div class="clog-body" style="color:#5a6878;font-size:14px;line-height:1.8;">known-hosts verification (host keys are currently trust-on-first-use) · recursive transfers · multi-file drag select</div></div>
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <div style="border-top:1px solid #131a24;">
+    <div style="max-width:1200px;margin:0 auto;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:14px;padding:32px 24px;">
+      <div style="display:flex;align-items:center;gap:10px;"><div class="logo-badge" style="width:22px;height:22px;font-size:9px;">&gt;_</div><span style="font-size:13px;color:#93a1b3;">dshh — in-process multi-protocol client</span></div>
+      <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#5a6878;">win64 · tauri 2 + react + rust · zero external binaries</span>
+    </div>
+  </div>
+
+</div>
+<script type="module" src="/src/main.ts"></script>
+</body>
+</html>
