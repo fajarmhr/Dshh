@@ -1,7 +1,7 @@
 # Dshh
 
 A modern, in-process multi-protocol connection client for Windows — **SSH**, **SFTP**,
-**SCP**, **FTP**, **Serial**, and a built-in **Local terminal** (cmd / PowerShell) — built
+**SCP**, **FTP**, **Serial**, **VNC**, and a built-in **Local terminal** (cmd / PowerShell) — built
 with **Tauri 2 + React + Rust**.
 
 ## Why in-process?
@@ -15,6 +15,7 @@ Every protocol is implemented *inside this app's own executable* using Rust crat
 | SCP            | `russh` (exec channel)  |
 | FTP            | `suppaftp`              |
 | Serial         | `serialport`            |
+| VNC (RFB)      | built in: `des`, `flate2`, `tokio-native-tls` |
 | Local terminal | `portable-pty` (ConPTY) |
 
 Nothing is shelled out to an external client and nothing has to be on your `PATH`:
@@ -25,7 +26,20 @@ browser.
 
 ## Features
 
-- **Multi-protocol tabs** — SSH, SFTP, FTP, Telnet, and Serial from one window.
+- **Multi-protocol tabs** — SSH, SFTP, FTP, Telnet, VNC and Serial from one window.
+- **VNC remote desktop** — the remote screen in a tab, with keyboard, mouse,
+  clipboard both ways, fit-to-tab or 1:1, view-only and Ctrl+Alt+Del. Logs in
+  with a VNC password, VeNCrypt (X509 TLS, username + password) or Apple
+  Remote Desktop for macOS Screen Sharing. **Route through** a saved SSH
+  session to tunnel the unencrypted VNC stream. **Type clipboard** keys text
+  in for consoles with no clipboard (BIOS, KVM, login prompts); on QEMU/KVM it
+  sends physical scancodes, so the guest's own keyboard layout applies.
+- **Cloud console links** — paste an OpenStack / Huawei FusionSphere
+  `vnc_auto.html?token=…` link (the monitor button in the sidebar picks it up
+  from the clipboard) and the VM's console opens in a tab: Dshh speaks the
+  noVNC proxy's WebSocket itself, no browser involved. Save the proxy as a
+  connection — its host can be picked from a saved SSH session — and only
+  the short-lived token is asked for each time.
 - **SSH jump host** — reach servers behind a bastion (`ssh -J` style, one hop);
   configure it per connection, password or key auth for the hop.
 - **Multi-execution** — the Broadcast toggle mirrors typed input to every

@@ -7,6 +7,8 @@ import {
   Cable,
   Globe,
   SquareTerminal,
+  Monitor,
+  MonitorPlay,
   Pencil,
   Trash2,
   Copy,
@@ -20,6 +22,7 @@ import { buildFilter } from "../lib/utils";
 import { useStore } from "../store";
 import { localOpenAdmin } from "../lib/api";
 import { LocalLauncher } from "./LocalLauncher";
+import { ConsoleLinkModal } from "./ConsoleLinkModal";
 import {
   PROTOCOL_COLORS,
   UNGROUPED,
@@ -34,6 +37,7 @@ const ICONS: Record<Protocol, React.ComponentType<{ size?: number; color?: strin
   serial: Cable,
   local: SquareTerminal,
   telnet: Globe,
+  vnc: Monitor,
 };
 
 const WIDTH_KEY = "dshh.sidebarWidth";
@@ -49,7 +53,13 @@ function connectionDetail(c: Connection): string {
     return [c.shell ?? "shell", c.admin ? "admin" : null, c.cwd || null]
       .filter(Boolean)
       .join(" · ");
-  return `${c.username ? c.username + "@" : ""}${c.host}:${c.port}`;
+  const target = `${c.username ? c.username + "@" : ""}${c.host}:${c.port}`;
+  if (c.protocol === "vnc") {
+    return [c.vncMode === "console" ? "console" : null, target, c.vncViaSsh ? "via ssh" : null]
+      .filter(Boolean)
+      .join(" · ");
+  }
+  return target;
 }
 
 export function Sidebar({
@@ -70,6 +80,7 @@ export function Sidebar({
   // persisted, so groups return to the default on the next launch.
   const [foldOverride, setFoldOverride] = useState<Record<string, boolean>>({});
   const [query, setQuery] = useState("");
+  const [consoleLinkOpen, setConsoleLinkOpen] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
   const asideRef = useRef<HTMLElement>(null);
@@ -180,6 +191,13 @@ export function Sidebar({
         </div>
         <div className="no-drag flex items-center gap-1">
           <LocalLauncher />
+          <button
+            onClick={() => setConsoleLinkOpen(true)}
+            title="Open a VNC console link (OpenStack / FusionSphere)"
+            className="tb-btn"
+          >
+            <MonitorPlay size={16} />
+          </button>
           <button onClick={onNew} title="New connection" className="tb-btn">
             <Plus size={16} />
           </button>
@@ -353,6 +371,8 @@ export function Sidebar({
           <SettingsIcon size={15} />
         </button>
       </div>
+
+      {consoleLinkOpen && <ConsoleLinkModal onClose={() => setConsoleLinkOpen(false)} />}
 
       {/* Drag handle: sits over the right border, widens the hit area without
           shifting layout. Turns accent-colored while hovered or dragging. */}

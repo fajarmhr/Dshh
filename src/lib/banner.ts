@@ -36,6 +36,7 @@ const PROTOCOL_TITLES: Record<Protocol, string> = {
   telnet: "Telnet session to",
   serial: "Serial session on",
   local: "Local shell",
+  vnc: "VNC session to",
 };
 
 /** The lines of the connect banner, without trailing newlines. */

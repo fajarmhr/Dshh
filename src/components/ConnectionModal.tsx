@@ -1,9 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
-import { X, RefreshCw } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { X, RefreshCw, Server } from "lucide-react";
 import { useStore } from "../store";
 import { serialListPorts, localListShells } from "../lib/api";
 import { clamp, overlayDismiss } from "../lib/utils";
 import { THEME_ORDER } from "../lib/themes";
+import { parseConsoleLink } from "../lib/consoleLink";
+import { useSshConnections } from "./ConsoleLinkModal";
 import {
   CONNECTION_COLORS,
   DEFAULT_PORTS,
@@ -13,10 +16,11 @@ import {
   type Connection,
   type LocalShell,
   type Protocol,
+  type VncMode,
 } from "../lib/types";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 
-const PROTOCOLS: Protocol[] = ["ssh", "sftp", "ftp", "telnet", "serial", "local"];
+const PROTOCOLS: Protocol[] = ["ssh", "sftp", "ftp", "telnet", "vnc", "serial", "local"];
 const BAUD_RATES = [9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600];
 
 export function ConnectionModal({
@@ -53,6 +57,8 @@ export function ConnectionModal({
   const [ports, setPorts] = useState<string[]>([]);
   const [shells, setShells] = useState<LocalShell[]>([]);
   const [useJump, setUseJump] = useState(!!initial?.jumpHost);
+  const [linkText, setLinkText] = useState("");
+  const sshConnections = useSshConnections();
 
   const set = <K extends keyof Connection>(k: K, v: Connection[K]) =>
     setForm((f) => ({ ...f, [k]: v }));
@@ -97,6 +103,36 @@ export function ConnectionModal({
       protocol: p,
       port: DEFAULT_PORTS[p] || f.port,
       shell: p === "local" ? f.shell ?? "cmd" : f.shell,
+      vncMode: p === "vnc" ? f.vncMode ?? "direct" : f.vncMode,
+    }));
+  };
+
+  const changeVncMode = (m: VncMode) => {
+    setForm((f) => ({
+      ...f,
+      vncMode: m,
+      // Swap the stock ports, but leave a port the user typed alone.
+      port:
+        m === "console" && f.port === 5900
+          ? 8002
+          : m === "direct" && f.port === 8002
+            ? 5900
+            : f.port,
+    }));
+  };
+
+  /** Fill the console fields from a pasted link. Its token is not kept. */
+  const applyLink = (text: string) => {
+    setLinkText(text);
+    const link = parseConsoleLink(text);
+    if (!link) return;
+    setForm((f) => ({
+      ...f,
+      host: link.host,
+      port: link.port,
+      vncTls: link.tls,
+      vncPath: link.path?.split("?")[0] || f.vncPath,
+      name: f.name.trim() ? f.name : link.name ?? f.name,
     }));
   };
 
@@ -136,7 +172,9 @@ export function ConnectionModal({
   const isSerial = form.protocol === "serial";
   const isLocal = form.protocol === "local";
   const isTelnet = form.protocol === "telnet";
-  const isNet = !isSerial && !isLocal;
+  const isVnc = form.protocol === "vnc";
+  const isConsole = isVnc && form.vncMode === "console";
+  const isNet = !isSerial && !isLocal && !isVnc;
   const isSshLike = form.protocol === "ssh" || form.protocol === "sftp";
 
   return (
@@ -152,7 +190,7 @@ export function ConnectionModal({
         </div>
 
         <div className="max-h-[70vh] space-y-4 overflow-y-auto px-5 py-4">
-          <div className="grid grid-cols-6 gap-1 rounded-lg border border-edge bg-bg-inset p-1">
+          <div className="grid grid-cols-7 gap-1 rounded-lg border border-edge bg-bg-inset p-1">
             {PROTOCOLS.map((p) => {
               const activeP = form.protocol === p;
               return (
@@ -457,6 +495,160 @@ export function ConnectionModal({
             </>
           )}
 
+          {isVnc && (
+            <>
+              <div>
+                <label className="field-label">Connect to</label>
+                <div className="grid grid-cols-2 gap-1 rounded-lg border border-edge bg-bg-inset p-1">
+                  {(["direct", "console"] as VncMode[]).map((m) => (
+                    <button
+                      key={m}
+                      onClick={() => changeVncMode(m)}
+                      className={`rounded-md py-1.5 text-xs transition active:scale-[0.98] ${
+                        (form.vncMode ?? "direct") === m
+                          ? "bg-accent/15 text-accent"
+                          : "text-ink-dim hover:bg-bg-hover hover:text-ink-mid"
+                      }`}
+                    >
+                      {m === "direct" ? "VNC server" : "Console link (token)"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {isConsole && (
+                <div>
+                  <label className="field-label">Paste a console link (optional)</label>
+                  <input
+                    className="field-input font-mono text-[12px]"
+                    value={linkText}
+                    placeholder="https://proxy:8002/vnc_auto.html?token=…"
+                    onChange={(e) => applyLink(e.target.value)}
+                  />
+                  <p className="mt-1 text-[11px] leading-relaxed text-ink-dim">
+                    {linkText.trim() && !parseConsoleLink(linkText)
+                      ? "That link has no token= parameter."
+                      : linkText.trim()
+                        ? "Filled in the proxy below. The token itself isn't saved."
+                        : "Fills in the proxy for you. The token is asked for each time you connect — they expire within minutes."}
+                  </p>
+                </div>
+              )}
+
+              <div className="grid grid-cols-[1fr_100px] gap-3">
+                <div>
+                  <label className="field-label">{isConsole ? "Console proxy" : "Host"}</label>
+                  <div className="flex gap-2">
+                    <input
+                      className="field-input flex-1 font-mono text-[13px]"
+                      value={form.host ?? ""}
+                      placeholder={isConsole ? "proxy IP or name" : "192.168.1.10"}
+                      onChange={(e) => set("host", e.target.value)}
+                    />
+                    <SshHostPicker
+                      connections={sshConnections}
+                      onPick={(host) => set("host", host)}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="field-label">Port</label>
+                  <input
+                    className="field-input font-mono text-[13px]"
+                    type="number"
+                    value={form.port ?? 0}
+                    onChange={(e) => set("port", Number(e.target.value))}
+                  />
+                </div>
+              </div>
+
+              {isConsole ? (
+                <>
+                  <div className="grid grid-cols-[1fr_auto] items-end gap-3">
+                    <div>
+                      <label className="field-label">WebSocket path</label>
+                      <input
+                        className="field-input font-mono text-[13px]"
+                        value={form.vncPath ?? ""}
+                        placeholder="websockify"
+                        onChange={(e) => set("vncPath", e.target.value || undefined)}
+                      />
+                    </div>
+                    <label className="flex cursor-pointer items-center gap-2 pb-2 text-sm text-ink-mid">
+                      <input
+                        type="checkbox"
+                        checked={form.vncTls ?? true}
+                        onChange={(e) => set("vncTls", e.target.checked)}
+                      />
+                      HTTPS
+                    </label>
+                  </div>
+                  <div>
+                    <label className="field-label">VNC password (optional)</label>
+                    <input
+                      className="field-input font-mono text-[13px]"
+                      type="password"
+                      value={form.password ?? ""}
+                      placeholder="only if the console asks after the token"
+                      onChange={(e) => set("password", e.target.value)}
+                    />
+                  </div>
+                </>
+              ) : (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="field-label">Username (optional)</label>
+                    <input
+                      className="field-input font-mono text-[13px]"
+                      value={form.username ?? ""}
+                      placeholder="macOS / VeNCrypt only"
+                      onChange={(e) => set("username", e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="field-label">Password</label>
+                    <input
+                      className="field-input font-mono text-[13px]"
+                      type="password"
+                      value={form.password ?? ""}
+                      onChange={(e) => set("password", e.target.value)}
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label className="field-label">Route through</label>
+                <select
+                  className="field-input text-[13px]"
+                  value={form.vncViaSsh ?? ""}
+                  onChange={(e) => set("vncViaSsh", e.target.value || undefined)}
+                >
+                  <option value="">Direct connection</option>
+                  {sshConnections.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      SSH · {c.name} ({c.host})
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-[11px] leading-relaxed text-ink-dim">
+                  {form.vncViaSsh
+                    ? "The host above is reached from that SSH server — use localhost for a VNC server running on it."
+                    : "Classic VNC traffic is unencrypted; routing it through a saved SSH session protects it."}
+                </p>
+              </div>
+
+              <label className="flex cursor-pointer items-center gap-2.5 text-sm text-ink-mid">
+                <input
+                  type="checkbox"
+                  checked={!!form.vncVerifyTls}
+                  onChange={(e) => set("vncVerifyTls", e.target.checked)}
+                />
+                Verify TLS certificate (off accepts self-signed ones)
+              </label>
+            </>
+          )}
+
           {isSerial && (
             <>
               <div>
@@ -537,7 +729,7 @@ export function ConnectionModal({
             </>
           )}
 
-          {form.protocol !== "sftp" && form.protocol !== "ftp" && (
+          {form.protocol !== "sftp" && form.protocol !== "ftp" && !isVnc && (
             <div className="space-y-3 border-t border-edge pt-4">
               <div>
                 <label className="field-label">Run on connect (optional)</label>
@@ -602,5 +794,85 @@ export function ConnectionModal({
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Fill the host from a saved SSH session — console proxies and VNC hosts are
+ * usually machines already in the list.
+ */
+function SshHostPicker({
+  connections,
+  onPick,
+}: {
+  connections: Connection[];
+  onPick: (host: string) => void;
+}) {
+  /** Where the list is pinned, in viewport pixels; null while closed. */
+  const [at, setAt] = useState<React.CSSProperties | null>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!at) return;
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (!btnRef.current?.contains(t) && !listRef.current?.contains(t)) setAt(null);
+    };
+    window.addEventListener("mousedown", onDown);
+    return () => window.removeEventListener("mousedown", onDown);
+  }, [at]);
+
+  // The form scrolls, and a list positioned inside it would be clipped by
+  // that scroll box, so it is portalled out and pinned to the button —
+  // dropping down where there's room, opening upward where there isn't.
+  const toggle = () => {
+    if (at) return setAt(null);
+    const r = btnRef.current!.getBoundingClientRect();
+    const right = window.innerWidth - r.right;
+    setAt(
+      window.innerHeight - r.bottom > 280
+        ? { top: r.bottom + 4, right }
+        : { bottom: window.innerHeight - r.top + 4, right }
+    );
+  };
+
+  const hosts = connections.filter((c) => c.host?.trim());
+  return (
+    <>
+      <button
+        ref={btnRef}
+        onClick={toggle}
+        disabled={hosts.length === 0}
+        className="rounded-md border border-edge px-2.5 text-ink-mid transition hover:bg-bg-hover hover:text-ink-hi disabled:opacity-30"
+        title={hosts.length ? "Use the host of a saved SSH session" : "No saved SSH sessions"}
+      >
+        <Server size={14} />
+      </button>
+      {at &&
+        createPortal(
+          <div
+            ref={listRef}
+            style={at}
+            className="fixed z-[60] max-h-64 w-64 animate-fade-up overflow-y-auto rounded-lg border border-edge bg-bg-panel/95 py-1 shadow-[0_16px_40px_-10px_rgba(4,10,20,0.85)] backdrop-blur-sm"
+          >
+            <div className="micro-label px-3 py-1">Host from SSH session</div>
+            {hosts.map((c) => (
+              <button
+                key={c.id}
+                onClick={() => {
+                  onPick(c.host!.trim());
+                  setAt(null);
+                }}
+                className="flex w-full flex-col px-3 py-1.5 text-left transition hover:bg-bg-hover"
+              >
+                <span className="truncate text-[12.5px] text-ink-hi">{c.name}</span>
+                <span className="truncate font-mono text-[10.5px] text-ink-dim">{c.host}</span>
+              </button>
+            ))}
+          </div>,
+          document.body
+        )}
+    </>
   );
 }

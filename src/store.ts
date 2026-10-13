@@ -268,6 +268,8 @@ interface AppState {
   openSession: (connectionId: string, title: string, protocol?: Protocol) => Session;
   /** Open a one-off local shell tab backed by a transient connection. */
   openLocalTerminal: (opts: { shell: string; label: string; cwd?: string }) => void;
+  /** Open a tab on an unsaved connection, e.g. a pasted VNC console link. */
+  openTransient: (conn: Omit<Connection, "id">) => void;
   setSessionStatus: (id: string, status: SessionStatus, error?: string) => void;
   closeSession: (id: string) => void;
   setActiveSession: (id: string | null) => void;
@@ -360,15 +362,18 @@ export const useStore = create<AppState>((set, get) => ({
     return session;
   },
 
-  openLocalTerminal: ({ shell, label, cwd }) => {
+  openLocalTerminal: ({ shell, label, cwd }) =>
     // A one-off local terminal has no saved profile, so it rides on a transient
     // connection kept only in memory. TerminalView reads `shell`/`cwd` from it.
-    const conn: Connection = { id: nanoid(), name: label, protocol: "local", shell, cwd };
+    get().openTransient({ name: label, protocol: "local", shell, cwd }),
+
+  openTransient: (c) => {
+    const conn: Connection = { ...c, id: nanoid() };
     const session: Session = {
       id: nanoid(),
       connectionId: conn.id,
-      protocol: "local",
-      title: label,
+      protocol: conn.protocol,
+      title: conn.name,
       status: "connecting",
     };
     set({

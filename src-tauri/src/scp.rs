@@ -273,6 +273,7 @@ mod tests {
             jump_password: None,
             jump_key_path: None,
             jump_passphrase: None,
+            ..Default::default()
         }
     }
 

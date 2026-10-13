@@ -267,7 +267,19 @@
            below are the static fallback shown when the API is unreachable. -->
       <div data-changelog>
       <div class="clog">
-        <div class="clog-v"><div style="display:flex;align-items:center;gap:8px;"><span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:#5b8cff;">v1.2.0</span><span style="border-radius:5px;background:rgba(62,207,142,0.1);padding:1px 7px;font-family:'JetBrains Mono',monospace;font-size:10px;color:#3ecf8e;">latest</span></div><div class="clog-d">sep 2026</div></div>
+        <div class="clog-v"><div style="display:flex;align-items:center;gap:8px;"><span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:#5b8cff;">v1.3.0</span><span style="border-radius:5px;background:rgba(62,207,142,0.1);padding:1px 7px;font-family:'JetBrains Mono',monospace;font-size:10px;color:#3ecf8e;">latest</span></div><div class="clog-d">oct 2026</div></div>
+        <div class="clog-body"><div class="clog-h">VNC remote desktop and cloud console links</div>
+          <ul class="clog-ul">
+            <li>A new VNC tab shows the remote screen with keyboard, mouse and clipboard, scaled to fit or at 1:1, plus view-only and a Ctrl+Alt+Del button. Like every other protocol it runs inside dshh.exe &mdash; no viewer to install</li>
+            <li>Logs in with a VNC password, VeNCrypt over X509 TLS (with a username and password where the server wants one) or Apple Remote Desktop for macOS Screen Sharing. A rejected password asks again instead of leaving a dead tab</li>
+            <li>Paste an OpenStack or Huawei FusionSphere console link (vnc_auto.html?token=&hellip;) and the VM's console opens straight in Dshh. Save the console proxy as a connection and only the short-lived token is asked for each time; its host can be picked from a saved SSH session</li>
+            <li>Route any VNC connection through a saved SSH session, so the unencrypted VNC stream never crosses the network bare</li>
+            <li>Type clipboard keys text into consoles that have no clipboard &mdash; BIOS screens, KVM consoles, login prompts. On QEMU/KVM it sends physical key codes, so the guest's own keyboard layout applies</li>
+          </ul>
+        </div>
+      </div>
+      <div class="clog">
+        <div class="clog-v"><span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:#5b8cff;">v1.2.0</span><div class="clog-d">sep 2026</div></div>
         <div class="clog-body"><div class="clog-h">Sort, group and search the file browser</div>
           <ul class="clog-ul">
             <li>Sort SFTP and FTP listings by name, type, size or date &mdash; click a column header, or pick from the new sort menu. Names sort naturally, so file2 comes before file10</li>

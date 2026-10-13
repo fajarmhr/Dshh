@@ -15,6 +15,7 @@ mod ssh;
 mod telnet;
 mod tunnel;
 mod update;
+mod vnc;
 
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -22,7 +23,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::sync::Mutex;
 
 /// Connection profile mirrored from the frontend (camelCase JSON).
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Connection {
     pub id: String,
@@ -46,6 +47,15 @@ pub struct Connection {
     pub jump_password: Option<String>,
     pub jump_key_path: Option<String>,
     pub jump_passphrase: Option<String>,
+    // VNC: "direct" (RFB over TCP or an SSH channel) or "console" (a noVNC
+    // proxy reached over a WebSocket, as OpenStack console links are).
+    pub vnc_mode: Option<String>,
+    /// Console WebSocket path; defaults to noVNC's `websockify`.
+    pub vnc_path: Option<String>,
+    /// Console over https/wss (the default) rather than http/ws.
+    pub vnc_tls: Option<bool>,
+    /// Check TLS certificates instead of accepting self-signed ones.
+    pub vnc_verify_tls: Option<bool>,
 }
 
 /// A file entry returned to the frontend for SFTP/FTP browsing.
@@ -94,6 +104,7 @@ pub struct AppState {
     pub tunnels: Mutex<HashMap<String, tunnel::TunnelSession>>,
     pub telnet: Mutex<HashMap<String, telnet::TelnetSession>>,
     pub edits: Mutex<HashMap<String, edit::EditSession>>,
+    pub vnc: Mutex<HashMap<String, vnc::VncSession>>,
 }
 
 static COUNTER: AtomicU64 = AtomicU64::new(1);
@@ -154,6 +165,13 @@ pub fn run() {
             telnet::telnet_open,
             telnet::telnet_write,
             telnet::telnet_close,
+            vnc::vnc_connect,
+            vnc::vnc_key,
+            vnc::vnc_pointer,
+            vnc::vnc_clipboard,
+            vnc::vnc_type,
+            vnc::vnc_ack,
+            vnc::vnc_close,
             edit::edit_start,
             edit::edit_stop,
             crypto::master_setup,

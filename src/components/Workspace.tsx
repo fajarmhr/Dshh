@@ -3,6 +3,7 @@ import { useStore } from "../store";
 import { TabBar } from "./TabBar";
 import { TerminalView } from "./TerminalView";
 import { FileBrowser } from "./FileBrowser";
+import { VncView } from "./VncView";
 import { BottomDock } from "./BottomDock";
 
 export function Workspace() {
@@ -39,7 +40,7 @@ export function Workspace() {
                 </div>
                 <div>
                   <span className="text-ink-mid">+</span> to add ssh · sftp · ftp ·
-                  serial
+                  serial · vnc
                 </div>
                 <div>
                   <span className="text-ink-mid">ctrl+f</span> search buffer ·{" "}
@@ -72,10 +73,12 @@ export function Workspace() {
               className={`absolute ${isSplitPane ? "border-l border-edge" : ""}`}
               style={style}
             >
-              {s.protocol === "ssh" ||
-              s.protocol === "serial" ||
-              s.protocol === "local" ||
-              s.protocol === "telnet" ? (
+              {s.protocol === "vnc" ? (
+                <VncView session={s} conn={conn} />
+              ) : s.protocol === "ssh" ||
+                s.protocol === "serial" ||
+                s.protocol === "local" ||
+                s.protocol === "telnet" ? (
                 <TerminalView session={s} conn={conn} />
               ) : (
                 <FileBrowser session={s} conn={conn} />

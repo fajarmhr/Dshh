@@ -1,4 +1,11 @@
-export type Protocol = "ssh" | "sftp" | "ftp" | "serial" | "local" | "telnet";
+export type Protocol = "ssh" | "sftp" | "ftp" | "serial" | "local" | "telnet" | "vnc";
+
+/**
+ * How a VNC connection reaches its server: `direct` speaks RFB over TCP (or an
+ * SSH channel); `console` goes through a noVNC proxy with a token, the way
+ * OpenStack and FusionSphere console links work.
+ */
+export type VncMode = "direct" | "console";
 
 export type AuthMethod = "password" | "key" | "agent";
 
@@ -89,6 +96,21 @@ export interface Connection {
   shell?: string;
   cwd?: string;
   admin?: boolean;
+  // VNC
+  vncMode?: VncMode;
+  /** Saved SSH connection to tunnel through; `host` is then resolved by that server. */
+  vncViaSsh?: string;
+  /** Console WebSocket path; noVNC's default is "websockify". */
+  vncPath?: string;
+  /** Console over https (the default) rather than http. */
+  vncTls?: boolean;
+  /** Check TLS certificates instead of accepting self-signed ones. */
+  vncVerifyTls?: boolean;
+  /**
+   * Token from a pasted console link. Only ever set on transient connections:
+   * console tokens expire within minutes, so a saved one would be useless.
+   */
+  vncToken?: string;
 }
 
 /** A local shell the backend can launch, from `local_list_shells`. */
@@ -178,6 +200,7 @@ export const DEFAULT_PORTS: Record<Protocol, number> = {
   serial: 0,
   local: 0,
   telnet: 23,
+  vnc: 5900,
 };
 
 export const PROTOCOL_LABELS: Record<Protocol, string> = {
@@ -187,6 +210,7 @@ export const PROTOCOL_LABELS: Record<Protocol, string> = {
   serial: "Serial",
   local: "Local",
   telnet: "Telnet",
+  vnc: "VNC",
 };
 
 export const PROTOCOL_COLORS: Record<Protocol, string> = {
@@ -196,6 +220,7 @@ export const PROTOCOL_COLORS: Record<Protocol, string> = {
   serial: "#b78af7",
   local: "#5fd0c5",
   telnet: "#e87a9c",
+  vnc: "#a3d65c",
 };
 
 export const UNGROUPED = "Ungrouped";

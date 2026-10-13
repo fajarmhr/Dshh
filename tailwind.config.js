@@ -34,6 +34,7 @@ export default {
           ftp: "#e8a54c",
           serial: "#b78af7",
           local: "#5fd0c5",
+          vnc: "#a3d65c",
         },
       },
       fontFamily: {

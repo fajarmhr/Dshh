@@ -1093,25 +1093,33 @@ dependencies = [
 
 [[package]]
 name = "dshh"
-version = "1.2.0"
+version = "1.3.0"
 dependencies = [
+ "aes 0.8.4",
  "aes-gcm 0.10.3",
  "anyhow",
  "arboard",
  "argon2 0.5.3",
  "async-trait",
  "base64 0.22.1",
+ "des",
+ "flate2",
+ "getrandom 0.3.4",
+ "md5",
+ "num-bigint",
  "portable-pty",
  "russh",
  "russh-sftp",
  "serde",
  "serde_json",
  "serialport",
+ "sha1",
  "suppaftp",
  "tauri",
  "tauri-build",
  "tauri-plugin-dialog",
  "tokio",
+ "tokio-native-tls",
  "ureq",
 ]
 
@@ -5115,6 +5123,16 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.118",
+]
+
+[[package]]
+name = "tokio-native-tls"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bbae76ab933c85776efabc971569dd6119c580d8f5d448769dec1764bf796ef2"
+dependencies = [
+ "native-tls",
+ "tokio",
 ]
 
 [[package]]

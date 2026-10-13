@@ -285,6 +285,7 @@ async fn connect_with(
             jump_password: None,
             jump_key_path: None,
             jump_passphrase: None,
+            ..Default::default()
         };
         // One level only: the synthesized jump connection carries no jump of
         // its own, so this recursion always bottoms out on the TCP branch. The

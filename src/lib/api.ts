@@ -113,6 +113,48 @@ export async function telnetOpen(
 export const telnetWrite = (id: string, data: string) => invoke("telnet_write", { id, data });
 export const telnetClose = (id: string) => invoke("telnet_close", { id });
 
+// ---- VNC (remote desktop; screen updates arrive as binary packets) ----
+export interface VncHello {
+  id: string;
+  width: number;
+  height: number;
+  /** Desktop name from ServerInit. */
+  name: string;
+  /** RFB version spoken, e.g. "3.8". */
+  version: string;
+  /** How we logged in, e.g. "vnc password" or "vencrypt · tls · user". */
+  security: string;
+}
+export type VncEvent =
+  | { kind: "closed"; reason: string }
+  | { kind: "clipboard"; text: string }
+  | { kind: "bell" };
+export async function vncConnect(
+  conn: Connection,
+  /** The SSH connection to tunnel through, if any. */
+  via: Connection | null,
+  /** Console token, for `vncMode: "console"`. */
+  token: string | null,
+  onFrame: (packet: ArrayBuffer) => void,
+  onEvent: (event: VncEvent) => void
+): Promise<VncHello> {
+  const frames = new Channel<ArrayBuffer>();
+  frames.onmessage = onFrame;
+  const events = new Channel<VncEvent>();
+  events.onmessage = onEvent;
+  return invoke<VncHello>("vnc_connect", { conn, via, token, onFrame: frames, onEvent: events });
+}
+export const vncKey = (id: string, keysym: number, code: number, down: boolean) =>
+  invoke("vnc_key", { id, keysym, code, down });
+export const vncPointer = (id: string, x: number, y: number, buttons: number) =>
+  invoke("vnc_pointer", { id, x, y, buttons });
+export const vncClipboard = (id: string, text: string) => invoke("vnc_clipboard", { id, text });
+/** Type text as key presses (for consoles without a clipboard). */
+export const vncType = (id: string, text: string) => invoke("vnc_type", { id, text });
+/** Tell the backend a screen packet has been drawn, so it may ask for more. */
+export const vncAck = (id: string) => invoke("vnc_ack", { id });
+export const vncClose = (id: string) => invoke("vnc_close", { id });
+
 // ---- Remote file editing (SFTP download → local editor → auto re-upload) ----
 export async function editStart(
   conn: Connection,

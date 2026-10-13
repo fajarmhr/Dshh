@@ -3,6 +3,7 @@ import {
   Columns2,
   FolderTree,
   HardDrive,
+  Monitor,
   Server,
   SquareTerminal,
   Terminal,
@@ -23,6 +24,7 @@ const PROTOCOL_ICONS: Record<Protocol, typeof Terminal> = {
   serial: Cable,
   local: SquareTerminal,
   telnet: Server,
+  vnc: Monitor,
 };
 
 const STATUS_COLOR: Record<string, string> = {
