@@ -80,7 +80,6 @@ import type { Connection, RemoteFile, Session } from "../lib/types";
 import { formatBytes, formatDate, isAuthFailure } from "../lib/utils";
 import { useSaveConnectionPref, wheelSteps } from "../lib/zoom";
 import { downloadPath } from "../lib/localPaths";
-import { FullScreenButton } from "./FullScreenButton";
 
 /** A bulk action waiting on its dialog. */
 type PendingAction =
@@ -111,7 +110,6 @@ export function FileBrowser({
 }) {
   const isSftp = session.protocol === "sftp";
   const setStatus = useStore((s) => s.setSessionStatus);
-  const settings = useStore((s) => s.settings);
   const [backendId, setBackendId] = useState<string | null>(null);
   const [cwd, setCwd] = useState<string>(isSftp ? "." : "/");
   const [files, setFiles] = useState<RemoteFile[]>([]);
@@ -1114,7 +1112,6 @@ export function FileBrowser({
           title="Filters this folder as you type · Enter searches subfolders too · * is a wildcard"
         />
         <ViewMenu prefs={view} onChange={setView} />
-        <FullScreenButton />
       </div>
 
       {search && (
@@ -1371,11 +1368,9 @@ export function FileBrowser({
         <PasswordPrompt
           title="Authentication failed"
           target={`${conn.username ? `${conn.username}@` : ""}${conn.host}:${conn.port}`}
-          error={authError}
           kind={retryField}
           busy={authBusy}
           needsUsername={!conn.username?.trim()}
-          remembers={settings.saveRetriedCredentials}
           onSubmit={(value, username) => {
             setAuthBusy(true);
             openConnection({ value, username: username || undefined });

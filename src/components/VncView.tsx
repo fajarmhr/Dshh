@@ -29,7 +29,6 @@ import { CTRL_ALT_DEL, keyFromEvent, type VncKey } from "../lib/vncKeys";
 import { parseConsoleLink } from "../lib/consoleLink";
 import { PasswordPrompt } from "./PasswordPrompt";
 import { VncCopyDialog, VncPasteDialog } from "./VncTextDialogs";
-import { FullScreenButton } from "./FullScreenButton";
 import { revealChrome, useFullScreen } from "../lib/fullscreen";
 import { ConsoleTokenPrompt } from "./ConsoleLinkModal";
 import type { Connection, Session } from "../lib/types";
@@ -791,7 +790,6 @@ export function VncView({ session, conn }: { session: Session; conn: Connection 
         {viewOnly ? <EyeOff size={14} /> : <Eye size={14} />}
         {viewOnly ? "View only" : "Control"}
       </button>
-      <FullScreenButton className={toolBtn} label />
     </>
   );
 
@@ -994,11 +992,9 @@ export function VncView({ session, conn }: { session: Session; conn: Connection 
         <PasswordPrompt
           title="Authentication failed"
           target={target}
-          error={authError}
           kind="password"
           needsUsername={!conn.username?.trim() && /username/i.test(authError)}
           busy={authBusy}
-          remembers={settings.saveRetriedCredentials}
           onSubmit={retryWithSecret}
           onCancel={() => setAuthError(null)}
         />

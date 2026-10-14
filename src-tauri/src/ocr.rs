@@ -3,7 +3,8 @@
 //! OCR engine built into Windows (Windows.Media.Ocr) — nothing to install.
 //!
 //! The frontend sends the selected screen area as raw RGBA, with its size in
-//! the `x-width` / `x-height` headers, and gets the recognised lines back.
+//! the `x-width` / `x-height` headers, and gets the recognised text back, laid
+//! out in rows and columns as the screen shows it.
 
 use tauri::ipc::{InvokeBody, Request};
 
@@ -32,13 +33,123 @@ pub async fn ocr_image(request: Request<'_>) -> Result<String, String> {
         return Err(format!("{} bytes isn't a {w}×{h} RGBA image", rgba.len()));
     }
     let rgba = rgba.clone();
-    let text = tokio::task::spawn_blocking(move || {
+    let lines = tokio::task::spawn_blocking(move || {
         let (w, h, bgra) = prepare(w, h, &rgba);
         recognize(w, h, &bgra)
     })
     .await
     .map_err(|e| format!("Text recognition stopped: {e}"))??;
-    Ok(tidy(&text))
+    Ok(tidy(&layout(&lines)))
+}
+
+/// A word the engine read, and its box on the image it was given.
+#[derive(Debug, Clone)]
+struct Word {
+    text: String,
+    x: f32,
+    y: f32,
+    w: f32,
+    h: f32,
+}
+
+impl Word {
+    fn len(&self) -> usize {
+        self.text.chars().count()
+    }
+}
+
+/// The middle value (the lower one of an even count); None when empty.
+fn median(values: impl Iterator<Item = f32>) -> Option<f32> {
+    let mut v: Vec<f32> = values.filter(|v| v.is_finite()).collect();
+    v.sort_by(f32::total_cmp);
+    v.get(v.len().saturating_sub(1) / 2).copied()
+}
+
+/// Put the words back where the screen has them. The engine breaks a row at
+/// a wide gap and reads a table column by column, so a two-row table comes
+/// back as six lines. Its lines are regrouped into rows by height, each word
+/// set at the column its position gives in the console's fixed character
+/// width, and empty rows kept — so the columns line up as they did.
+fn layout(lines: &[Vec<Word>]) -> String {
+    let words: Vec<&Word> = lines.iter().flatten().collect();
+    let Some(height) = median(words.iter().map(|w| w.h)) else {
+        return String::new();
+    };
+    let pitch = char_pitch(lines, height);
+    let left = words.iter().map(|w| w.x).fold(f32::MAX, f32::min);
+
+    // Rows top to bottom: the engine's lines whose middles sit within half a
+    // character's height of each other share one.
+    let mut frags: Vec<(f32, &[Word])> = lines
+        .iter()
+        .filter(|l| !l.is_empty())
+        .map(|l| {
+            let top = l.iter().map(|w| w.y).fold(f32::MAX, f32::min);
+            let bottom = l.iter().map(|w| w.y + w.h).fold(f32::MIN, f32::max);
+            ((top + bottom) / 2.0, l.as_slice())
+        })
+        .collect();
+    frags.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let mut rows: Vec<(f32, Vec<&Word>)> = Vec::new();
+    for (mid, frag) in frags {
+        match rows.last_mut() {
+            Some((row_mid, row)) if (mid - *row_mid).abs() < height / 2.0 => {
+                let n = row.len() as f32;
+                *row_mid = (*row_mid * n + mid * frag.len() as f32) / (n + frag.len() as f32);
+                row.extend(frag);
+            }
+            _ => rows.push((mid, frag.iter().collect())),
+        }
+    }
+
+    // The line spacing is the closest two rows sit; a wider step had rows
+    // with nothing readable on them (blank, or only a rule of dashes).
+    let spacing = rows
+        .windows(2)
+        .map(|r| r[1].0 - r[0].0)
+        .fold(f32::MAX, f32::min)
+        .max(height);
+
+    let mut out = String::new();
+    let mut above: Option<f32> = None;
+    for (mid, mut row) in rows {
+        if let Some(above) = above {
+            let steps = ((mid - above) / spacing).round().max(1.0) as usize;
+            out.push_str(&"\n".repeat(steps));
+        }
+        above = Some(mid);
+        row.sort_by(|a, b| a.x.total_cmp(&b.x));
+        let mut col = 0;
+        for (i, word) in row.iter().enumerate() {
+            let at = ((word.x - left) / pitch).round().max(0.0) as usize;
+            // At least a space between words, however the columns round.
+            let gap = if i == 0 { at } else { at.saturating_sub(col).max(1) };
+            out.extend(std::iter::repeat_n(' ', gap));
+            out.push_str(&word.text);
+            col += gap + word.len();
+        }
+    }
+    out
+}
+
+/// The console's character width. Words the engine kept on one line are
+/// mostly a single space apart, so the step from one word's start to the
+/// next, over its length plus one, is the width; steps far from what the
+/// words' own widths suggest (a wide gap, not one space) are left out.
+fn char_pitch(lines: &[Vec<Word>], height: f32) -> f32 {
+    let words = || lines.iter().flatten().filter(|w| w.len() > 0);
+    // A word's ink stops short of its last cell, so this runs a bit under.
+    let ink = median(words().filter(|w| w.len() > 1).map(|w| w.w / w.len() as f32))
+        .or_else(|| median(words().map(|w| w.w / w.len() as f32)))
+        .unwrap_or(height * 0.6);
+    let steps = lines
+        .iter()
+        .flat_map(|l| l.windows(2))
+        .map(|p| (p[1].x - p[0].x) / (p[0].len() + 1) as f32)
+        .filter(|s| (ink * 0.9..=ink * 1.3).contains(s));
+    median(steps)
+        .unwrap_or(ink * 1.05)
+        .clamp(height * 0.3, height * 1.2)
 }
 
 /// Grey and scaled up (bilinear), which is what the engine reads best.
@@ -72,19 +183,50 @@ fn prepare(w: u32, h: u32, rgba: &[u8]) -> (u32, u32, Vec<u8>) {
 }
 
 /// Undo the engine's usual misreads of console text: a slashed or dotted
-/// zero comes back as Ø, and a hyphen or underscore as a dash.
+/// zero comes back as Ø, or as O inside a number ("73/O/8"), and a hyphen or
+/// underscore as a dash.
 fn tidy(text: &str) -> String {
-    text.chars()
+    let mut out: Vec<char> = text
+        .chars()
         .map(|c| match c {
             'Ø' | 'ø' => '0',
             '—' | '–' => '-',
             c => c,
         })
-        .collect()
+        .collect();
+    for i in 0..out.len() {
+        if out[i] == 'O' && reads_as_zero(&out, i) {
+            out[i] = '0';
+        }
+    }
+    out.into_iter().collect()
 }
 
+/// An O with a digit beside it, or between two of `/ . :` in a word that has
+/// digits, and nothing but those (or another O) next to it — so "1O", "73/O/8"
+/// and "1OO" are numbers, while "I/O", "OK" and "ISO9001" stay as they are.
+fn reads_as_zero(chars: &[char], i: usize) -> bool {
+    let near = |j: Option<usize>| j.and_then(|j| chars.get(j)).copied().filter(|c| !c.is_whitespace());
+    let (before, after) = (near(i.checked_sub(1)), near(Some(i + 1)));
+    let sep = |c: char| matches!(c, '/' | '.' | ':');
+    let fits = |c: Option<char>| c.is_none_or(|c| c.is_ascii_digit() || sep(c) || c == 'O');
+    if !fits(before) || !fits(after) {
+        return false;
+    }
+    let digit = |c: Option<char>| c.is_some_and(|c| c.is_ascii_digit());
+    if digit(before) || digit(after) {
+        return true;
+    }
+    let word_start = chars[..i].iter().rposition(|c| c.is_whitespace()).map_or(0, |j| j + 1);
+    let word_end = chars[i..].iter().position(|c| c.is_whitespace()).map_or(chars.len(), |j| i + j);
+    before.is_some_and(sep)
+        && after.is_some_and(sep)
+        && chars[word_start..word_end].iter().any(char::is_ascii_digit)
+}
+
+/// The engine's lines, each as its words with their boxes.
 #[cfg(windows)]
-fn recognize(w: u32, h: u32, bgra: &[u8]) -> Result<String, String> {
+fn recognize(w: u32, h: u32, bgra: &[u8]) -> Result<Vec<Vec<Word>>, String> {
     use windows::Graphics::Imaging::{BitmapAlphaMode, BitmapPixelFormat, SoftwareBitmap};
     use windows::Media::Ocr::OcrEngine;
     use windows::Storage::Streams::DataWriter;
@@ -119,18 +261,26 @@ fn recognize(w: u32, h: u32, bgra: &[u8]) -> Result<String, String> {
     .map_err(fail)?;
     let result = engine.RecognizeAsync(&bitmap).map_err(fail)?.get().map_err(fail)?;
 
-    let mut text = String::new();
+    let mut lines = Vec::new();
     for line in result.Lines().map_err(fail)? {
-        if !text.is_empty() {
-            text.push('\n');
+        let mut words = Vec::new();
+        for word in line.Words().map_err(fail)? {
+            let r = word.BoundingRect().map_err(fail)?;
+            words.push(Word {
+                text: word.Text().map_err(fail)?.to_string_lossy(),
+                x: r.X,
+                y: r.Y,
+                w: r.Width,
+                h: r.Height,
+            });
         }
-        text.push_str(&line.Text().map_err(fail)?.to_string_lossy());
+        lines.push(words);
     }
-    Ok(text)
+    Ok(lines)
 }
 
 #[cfg(not(windows))]
-fn recognize(_w: u32, _h: u32, _bgra: &[u8]) -> Result<String, String> {
+fn recognize(_w: u32, _h: u32, _bgra: &[u8]) -> Result<Vec<Vec<Word>>, String> {
     Err("Reading text off the screen needs Windows".into())
 }
 
@@ -164,5 +314,72 @@ mod tests {
     #[test]
     fn misread_zeros_and_dashes_are_put_back() {
         assert_eq!(tidy("ethØ pfifo—fast 1Ø.ø–2"), "eth0 pfifo-fast 10.0-2");
+        assert_eq!(
+            tidy("200GE73/O/8 1OO vlan1O 10.O.0.1 I/O OK ISO9001 O GO/O/1"),
+            "200GE73/0/8 100 vlan10 10.0.0.1 I/O OK ISO9001 O GO/0/1"
+        );
+    }
+
+    /// Words as a console shows them: 10px a character, 30px a row, the ink
+    /// a little inside each cell.
+    fn run(text: &str, col: usize, row: usize) -> Vec<Word> {
+        let mut at = col;
+        text.split(' ')
+            .map(|t| {
+                let n = t.chars().count();
+                let w = Word {
+                    text: t.into(),
+                    x: at as f32 * 10.0 + 1.0,
+                    y: row as f32 * 30.0 + 5.0,
+                    w: n as f32 * 10.0 - 2.0,
+                    h: 20.0,
+                };
+                at += n + 1;
+                w
+            })
+            .collect()
+    }
+
+    /// The same, a few pixels lower: a line without capitals or with
+    /// descenders has its box off-centre from its neighbours'.
+    fn lower(mut words: Vec<Word>, dy: f32) -> Vec<Word> {
+        words.iter_mut().for_each(|w| w.y += dy);
+        words
+    }
+
+    #[test]
+    fn a_table_read_column_by_column_comes_back_in_rows() {
+        // As the engine hands it over: the two rows of a table broken at
+        // their wide gaps and read a column at a time, and the rule of dashes
+        // on row 1 and the ones before END not read at all.
+        let lines = vec![
+            run("The result is as follows:", 0, 0),
+            run("Trunk Interface Name Member Interface Name Select Status Member Status", 0, 2),
+            run("Eth-Trunk2", 0, 4),
+            run("Eth-Trunk2", 0, 5),
+            lower(run("200GE73/0/8", 18, 4), 4.0),
+            lower(run("200GE73/0/10", 18, 5), 4.0),
+            [run("Selected", 35, 4), run("Up", 47, 4)].concat(),
+            [run("Selected", 35, 5), run("Up", 47, 5)].concat(),
+            run("(Number of results = 2)", 0, 6),
+            run("END", 4, 8),
+        ];
+        assert_eq!(
+            layout(&lines),
+            "The result is as follows:\n\
+             \n\
+             Trunk Interface Name Member Interface Name Select Status Member Status\n\
+             \n\
+             Eth-Trunk2        200GE73/0/8      Selected    Up\n\
+             Eth-Trunk2        200GE73/0/10     Selected    Up\n\
+             (Number of results = 2)\n\
+             \n    END"
+        );
+    }
+
+    #[test]
+    fn nothing_read_is_empty() {
+        assert_eq!(layout(&[]), "");
+        assert_eq!(layout(&[vec![]]), "");
     }
 }

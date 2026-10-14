@@ -11,29 +11,26 @@ import { overlayDismiss } from "../lib/utils";
  * — never before, so a second wrong guess can't overwrite a working password.
  * That write is a setting rather than a checkbox on this dialog: being asked at
  * all means the stored credential is wrong, and correcting it every time is
- * what people want. Settings › General turns it off.
+ * what people want. Settings › General turns it off. The dialog itself only
+ * says the password was wrong — nothing about what is kept, or the server's
+ * own wording.
  */
 export function PasswordPrompt({
   title,
   target,
-  error,
   /** "password" or "passphrase" — whichever the failing auth method needs. */
   kind,
   /** Ask for a username too: the session was saved without one. */
   needsUsername,
   busy,
-  remembers,
   onSubmit,
   onCancel,
 }: {
   title: string;
   target: string;
-  error: string;
   kind: "password" | "passphrase";
   needsUsername: boolean;
   busy: boolean;
-  /** Whether the accepted credential will be saved, for the footer note. */
-  remembers: boolean;
   onSubmit: (secret: string, username: string) => void;
   onCancel: () => void;
 }) {
@@ -61,7 +58,9 @@ export function PasswordPrompt({
 
         <div className="space-y-3 px-5 py-4">
           <div className="rounded-lg border border-err/40 bg-err/10 px-3 py-2 font-mono text-[11px] leading-relaxed text-err">
-            {error}
+            {needsUsername
+              ? `Wrong username or ${kind} — enter them again.`
+              : `Wrong ${kind} — enter it again.`}
           </div>
 
           {needsUsername && (
@@ -103,24 +102,17 @@ export function PasswordPrompt({
           </div>
         </div>
 
-        <div className="flex items-center justify-between gap-3 border-t border-edge px-5 py-3">
-          <span className="font-mono text-[10px] leading-relaxed text-ink-dim">
-            {remembers
-              ? "saved to this session once it connects"
-              : "used for this attempt only (saving is off in Settings)"}
-          </span>
-          <div className="flex shrink-0 items-center gap-2">
-            <button onClick={onCancel} className="btn-ghost" disabled={busy}>
-              Cancel
-            </button>
-            <button
-              onClick={submit}
-              disabled={!ready || busy}
-              className="btn-primary disabled:opacity-40"
-            >
-              {busy ? "Connecting…" : "Retry"}
-            </button>
-          </div>
+        <div className="flex items-center justify-end gap-2 border-t border-edge px-5 py-3">
+          <button onClick={onCancel} className="btn-ghost" disabled={busy}>
+            Cancel
+          </button>
+          <button
+            onClick={submit}
+            disabled={!ready || busy}
+            className="btn-primary disabled:opacity-40"
+          >
+            {busy ? "Connecting…" : "Retry"}
+          </button>
         </div>
       </div>
     </div>

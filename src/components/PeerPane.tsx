@@ -77,7 +77,6 @@ export function PeerPane({
   onPush: (items: DragItem[], dir: string) => void;
 }) {
   const isFtp = peer.protocol === "ftp";
-  const settings = useStore((s) => s.settings);
   const [id, setId] = useState<string | null>(null);
   /** Same as `peer` unless a retried credential got us in. */
   const [authConn, setAuthConn] = useState(peer);
@@ -526,11 +525,9 @@ export function PeerPane({
         <PasswordPrompt
           title="Authentication failed"
           target={`${peer.username ? `${peer.username}@` : ""}${peer.host}:${peer.port}`}
-          error={authError}
           kind={retryField}
           busy={authBusy}
           needsUsername={!peer.username?.trim()}
-          remembers={settings.saveRetriedCredentials}
           onSubmit={(value, username) => {
             setAuthBusy(true);
             connect({ value, username: username || undefined });

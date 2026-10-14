@@ -52,10 +52,20 @@
            below are the static fallback shown when the API is unreachable. -->
       <div data-changelog>
       <div class="clog">
-        <div class="clog-v"><div style="display:flex;align-items:center;gap:8px;"><span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:#5b8cff;">v1.3.4</span><span style="border-radius:5px;background:rgba(62,207,142,0.1);padding:1px 7px;font-family:'JetBrains Mono',monospace;font-size:10px;color:#3ecf8e;">latest</span></div><div class="clog-d">oct 2026</div></div>
+        <div class="clog-v"><div style="display:flex;align-items:center;gap:8px;"><span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:#5b8cff;">v1.3.5</span><span style="border-radius:5px;background:rgba(62,207,142,0.1);padding:1px 7px;font-family:'JetBrains Mono',monospace;font-size:10px;color:#3ecf8e;">latest</span></div><div class="clog-d">oct 2026</div></div>
+        <div class="clog-body"><div class="clog-h">VNC copy text keeps tables in rows</div>
+          <ul class="clog-ul">
+            <li>Copy text on VNC lays the text out as the screen shows it: a table comes back row by row with its columns lined up, instead of one column after another, and blank lines stay where they were. A zero read as the letter O inside a number (73/O/8) is put back</li>
+            <li>One full-screen button, at the right end of the tab bar, instead of one there and another in each toolbar</li>
+            <li>When a server turns a password down, the retry box just says the password was wrong</li>
+          </ul>
+        </div>
+      </div>
+      <div class="clog">
+        <div class="clog-v"><div style="display:flex;align-items:center;gap:8px;"><span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:#5b8cff;">v1.3.4</span></div><div class="clog-d">oct 2026</div></div>
         <div class="clog-body"><div class="clog-h">Full screen, text in and out of VNC consoles, a group picker and Help</div>
           <ul class="clog-ul">
-            <li>Full screen for every kind of session &mdash; terminal, file browser, VNC &mdash; and for a split view, both halves at once. Press Ctrl+Alt+Enter or the new button in the tab bar or any toolbar; the sidebar, tabs and bottom bar step aside and the window covers the whole monitor. Touch the top edge to slide the tab bar down. Ctrl+Alt+Enter never reaches the terminal or the VM</li>
+            <li>Full screen for every kind of session &mdash; terminal, file browser, VNC &mdash; and for a split view, both halves at once. Press Ctrl+Alt+Enter or the new button in the tab bar; the sidebar, tabs and bottom bar step aside and the window covers the whole monitor. Touch the top edge to slide the tab bar down. Ctrl+Alt+Enter never reaches the terminal or the VM</li>
             <li>A VNC screen goes edge to edge in full screen; its controls slide down with the tab bar</li>
             <li>Copy text: drag over any part of the remote screen and Dshh reads the text with Windows' built-in OCR, so you can copy from a BIOS, a Linux console or a login screen that has no clipboard. You check and edit what was read before it goes on your clipboard</li>
             <li>Paste now opens your clipboard in an editable box first: fix it up, see how many Enters it will press and which characters a US keyboard can't type, then type it in or send it as the remote clipboard. Nothing leaves your PC on its own any more &mdash; clicking into the screen no longer pushes your clipboard to the machine</li>

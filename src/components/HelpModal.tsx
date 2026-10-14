@@ -50,7 +50,7 @@ const TOPICS: Topic[] = [
       <>Click a tab to switch to it; hover a tab for its split-pane and close buttons.</>,
     ],
     tips: [
-      "If a server rejects the saved password, Dshh asks again instead of leaving a dead tab — and keeps the one that works.",
+      "If a server turns the password down, Dshh asks for it again instead of leaving a dead tab.",
     ],
   },
   {
@@ -136,7 +136,7 @@ const TOPICS: Topic[] = [
     icon: Fullscreen,
     what: "Give the open session the whole monitor — any kind of session, and both halves of a split view.",
     how: [
-      <>Press <Key>Ctrl+Alt+Enter</Key>, or the full-screen button at the right end of the tab bar or in any session's toolbar.</>,
+      <>Press <Key>Ctrl+Alt+Enter</Key>, or the full-screen button at the right end of the tab bar.</>,
       "The sidebar, tab bar and bottom bar step aside; each session keeps its own toolbar.",
       "Touch the very top edge of the screen with the mouse to slide the tab bar down — to switch sessions or leave full screen.",
       <>Press <Key>Ctrl+Alt+Enter</Key> again to go back. It never reaches the remote machine.</>,
@@ -203,15 +203,12 @@ const TOPICS: Topic[] = [
     id: "settings",
     title: "Settings, security & updates",
     icon: Settings,
-    what: "Make Dshh yours, protect saved passwords, and keep it current.",
+    what: "Make Dshh yours, protect your logins, and keep it current.",
     how: [
       <><b>General</b>: password retry, session colours and status bar, groups, updates, and the window backdrop (Mica or acrylic on Windows 11).</>,
       <><b>Terminal</b>: font, size, colour theme, scrollback, and the multi-line paste warning.</>,
       <><b>Output &amp; logs</b>: keyword highlighting and where session logs are written.</>,
-      <><b>Security</b>: a master password that encrypts saved passwords, and a sessions folder that mirrors your connections to <code>connections.json</code> — also how you carry them to another PC.</>,
-    ],
-    tips: [
-      "Dshh is portable: settings live in the data folder next to dshh.exe, so the whole folder can be copied to another machine.",
+      <><b>Security</b>: a master password that keeps your sessions' logins locked until you enter it, and a sessions folder for taking your connections to another PC.</>,
     ],
   },
   {

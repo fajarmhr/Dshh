@@ -28,7 +28,7 @@ browser.
 
 - **Multi-protocol tabs** — SSH, SFTP, FTP, Telnet, VNC and Serial from one window.
 - **Full screen** — any session, or both halves of a split view, across the
-  whole monitor: `Ctrl+Alt+Enter` or the button in the tab bar or any toolbar.
+  whole monitor: `Ctrl+Alt+Enter` or the button at the right end of the tab bar.
   The sidebar, tabs and bottom bar step aside; touching the top edge slides
   the tab bar back down. The shortcut never reaches the terminal or the VM.
 - **Groups** — hover a saved session and click its folder button to move it
@@ -47,7 +47,8 @@ browser.
   prompts) or send it as its clipboard; on QEMU/KVM typing sends physical
   scancodes, so the guest's own keyboard layout applies. **Copy text** reads
   text off any part of the screen with Windows' built-in OCR, for consoles
-  that never share a clipboard — check and edit it, then copy.
+  that never share a clipboard — tables keep their rows and columns; check
+  and edit it, then copy.
 - **Cloud console links** — paste an OpenStack / Huawei FusionSphere
   `vnc_auto.html?token=…` link (the monitor button in the sidebar picks it up
   from the clipboard) and the VM's console opens in a tab: Dshh speaks the
