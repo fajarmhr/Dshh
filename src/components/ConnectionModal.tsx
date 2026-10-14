@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { X, RefreshCw, Server } from "lucide-react";
 import { useStore } from "../store";
@@ -7,6 +7,7 @@ import { clamp, overlayDismiss } from "../lib/utils";
 import { THEME_ORDER } from "../lib/themes";
 import { parseConsoleLink } from "../lib/consoleLink";
 import { useSshConnections } from "./ConsoleLinkModal";
+import { GroupField } from "./GroupPicker";
 import {
   CONNECTION_COLORS,
   DEFAULT_PORTS,
@@ -32,14 +33,6 @@ export function ConnectionModal({
 }) {
   const addConnection = useStore((s) => s.addConnection);
   const updateConnection = useStore((s) => s.updateConnection);
-  const connections = useStore((s) => s.connections);
-  const existingGroups = useMemo(
-    () =>
-      Array.from(
-        new Set(connections.map((c) => c.group?.trim()).filter((g): g is string => !!g))
-      ).sort(),
-    [connections]
-  );
 
   const [form, setForm] = useState<Omit<Connection, "id">>(
     initial ?? {
@@ -220,18 +213,7 @@ export function ConnectionModal({
             </div>
             <div>
               <label className="field-label">Group</label>
-              <input
-                className="field-input"
-                list="dshh-groups"
-                value={form.group ?? ""}
-                placeholder="e.g. Production"
-                onChange={(e) => set("group", e.target.value)}
-              />
-              <datalist id="dshh-groups">
-                {existingGroups.map((g) => (
-                  <option key={g} value={g} />
-                ))}
-              </datalist>
+              <GroupField value={form.group} onChange={(g) => set("group", g)} />
             </div>
           </div>
 

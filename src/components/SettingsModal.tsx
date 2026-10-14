@@ -1,4 +1,4 @@
-import { Database, FolderOpen, Plus, RefreshCw, Trash2, X } from "lucide-react";
+import { Database, FolderOpen, LifeBuoy, Plus, RefreshCw, Trash2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { nanoid } from "nanoid";
@@ -25,6 +25,7 @@ import {
 import { THEME_ORDER } from "../lib/themes";
 import type { CursorStyle, HighlightColor, HighlightRule } from "../lib/types";
 import { clamp, cn, overlayDismiss } from "../lib/utils";
+import { HelpModal } from "./HelpModal";
 
 type TabId = "general" | "terminal" | "output" | "security";
 
@@ -133,6 +134,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
   const [sessionsNote, setSessionsNote] = useState("");
   const [effectNote, setEffectNote] = useState("");
   const [tab, setTab] = useState<TabId>("general");
+  const [helpOpen, setHelpOpen] = useState(false);
 
   /** Candidate fonts that are actually present on this machine. */
   const [fonts, setFonts] = useState<string[]>([BUNDLED_FONT]);
@@ -322,9 +324,19 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
       <div className="modal-shell w-[480px]" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-edge px-5 py-3">
           <h2 className="text-sm font-semibold text-ink-hi">Settings</h2>
-          <button onClick={onClose} className="tb-btn">
-            <X size={16} />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setHelpOpen(true)}
+              className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-ink-mid transition hover:bg-bg-hover hover:text-ink-hi"
+              title="What each feature does, and how to use it"
+            >
+              <LifeBuoy size={14} />
+              Help
+            </button>
+            <button onClick={onClose} className="tb-btn">
+              <X size={16} />
+            </button>
+          </div>
         </div>
 
         <div className="flex gap-1 border-b border-edge px-3 pt-2">
@@ -1023,6 +1035,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
           </button>
         </div>
       </div>
+      {helpOpen && <HelpModal onClose={() => setHelpOpen(false)} />}
     </div>
   );
 }

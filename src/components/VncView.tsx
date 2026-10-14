@@ -1,17 +1,14 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
   ClipboardPaste,
   Eye,
   EyeOff,
-  Fullscreen,
   Maximize2,
   Minimize2,
   Power,
   RotateCw,
   ScanText,
-  Shrink,
 } from "lucide-react";
 import { useStore } from "../store";
 import {
@@ -32,6 +29,8 @@ import { CTRL_ALT_DEL, keyFromEvent, type VncKey } from "../lib/vncKeys";
 import { parseConsoleLink } from "../lib/consoleLink";
 import { PasswordPrompt } from "./PasswordPrompt";
 import { VncCopyDialog, VncPasteDialog } from "./VncTextDialogs";
+import { FullScreenButton } from "./FullScreenButton";
+import { revealChrome, useFullScreen } from "../lib/fullscreen";
 import { ConsoleTokenPrompt } from "./ConsoleLinkModal";
 import type { Connection, Session } from "../lib/types";
 import { cn, formatDuration, isAuthFailure } from "../lib/utils";
@@ -85,8 +84,6 @@ export function VncView({ session, conn }: { session: Session; conn: Connection 
   const moveRafRef = useRef(0);
   const wheelRef = useRef({ x: 0, y: 0 });
   const viewOnlyRef = useRef(false);
-  /** Keys whose release must not reach the remote (the full-screen combo's Enter). */
-  const swallowRef = useRef(new Set<string>());
   /** Bumped per screen reading, so a stale one can't land in a newer dialog. */
   const ocrSeqRef = useRef(0);
   /** Automatic console reconnects: the pending timer, retries used, last connect time. */
@@ -127,10 +124,11 @@ export function VncView({ session, conn }: { session: Session; conn: Connection 
     null
   );
   /** The window fills the monitor and this tab fills the window. */
-  const [full, setFull] = useState(false);
-  const fullRef = useRef(false);
-  fullRef.current = full;
-  /** Hold the full-screen bar open for a moment: on entry, or to show a note. */
+  /** Workspace full screen: the remote screen edge to edge, controls on a slide-down bar. */
+  const full = useFullScreen((s) => s.on);
+  const revealed = useFullScreen((s) => s.revealed);
+  const isActive = useStore((s) => s.activeSessionId === session.id);
+  /** Hold the full-screen bar open for a moment, to show a note. */
   const [barShown, setBarShown] = useState(false);
   const [connectedAt, setConnectedAt] = useState<number | null>(null);
   const [uptime, setUptime] = useState("");
@@ -402,7 +400,6 @@ export function VncView({ session, conn }: { session: Session; conn: Connection 
     return () => {
       life.dead = true;
       window.clearTimeout(retryRef.current.timer);
-      if (fullRef.current) getCurrentWindow().setFullscreen(false).catch(() => {});
       canvas.removeEventListener("wheel", onWheel);
       cancelAnimationFrame(moveRafRef.current);
       if (backendId.current) {
@@ -513,16 +510,6 @@ export function VncView({ session, conn }: { session: Session; conn: Connection 
   };
 
   const onKeyDown = (e: React.KeyboardEvent) => {
-    // Ctrl+Alt+Enter toggles full screen and never reaches the remote. Ctrl
-    // and Alt went down there already, so they're let go of first.
-    if (e.ctrlKey && e.altKey && e.key === "Enter") {
-      e.preventDefault();
-      e.stopPropagation();
-      swallowRef.current.add(e.code);
-      releaseAll();
-      toggleFull();
-      return;
-    }
     if (selecting) {
       e.preventDefault();
       e.stopPropagation();
@@ -542,7 +529,7 @@ export function VncView({ session, conn }: { session: Session; conn: Connection 
   };
 
   const onKeyUp = (e: React.KeyboardEvent) => {
-    if (swallowRef.current.delete(e.code) || selecting) {
+    if (selecting) {
       e.preventDefault();
       e.stopPropagation();
       return;
@@ -668,32 +655,25 @@ export function VncView({ session, conn }: { session: Session; conn: Connection 
       .catch((e) => setNote(`Copy failed: ${String(e)}`));
   };
 
-  const toggleFull = (on = !fullRef.current) => {
-    getCurrentWindow()
-      .setFullscreen(on)
-      .catch((e) => setNote(`Full screen failed: ${String(e)}`));
-    setFull(on);
-    setBarShown(on);
-    // A leftover note would take the place of the exit hint on the bar.
-    if (on) setNote("");
-    requestAnimationFrame(() => canvasRef.current?.focus());
-  };
-
-  // Keys pressed outside the screen (on the full-screen bar, say) never
-  // reach its handler, so the combo and Esc are caught here as well.
+  // Full screen came or went — by Ctrl+Alt+Enter, typically, whose Ctrl and
+  // Alt already went down on the remote (the Enter never reaches it): let go
+  // of them there. Then the visible screen takes the keyboard again, and a
+  // leftover note makes way for the exit hint on the bar.
   useEffect(() => {
-    if (!full && !selecting) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (selecting && e.key === "Escape") cancelSelect();
-      else if (full && e.ctrlKey && e.altKey && e.key === "Enter") {
-        e.preventDefault();
-        toggleFull(false);
-      }
-    };
+    releaseAll();
+    if (full) setNote("");
+    if (isActive) requestAnimationFrame(() => canvasRef.current?.focus());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [full]);
+
+  // Esc pressed outside the screen still cancels a selection.
+  useEffect(() => {
+    if (!selecting) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && cancelSelect();
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [full, selecting]);
+  }, [selecting]);
 
   // In full screen the toolbar's note is out of sight, so a new one opens
   // the bar for a moment instead.
@@ -754,7 +734,7 @@ export function VncView({ session, conn }: { session: Session; conn: Connection 
         ? "bg-err"
         : "bg-ink-dim";
   const toolBtn =
-    "flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-ink-mid transition hover:bg-bg-hover hover:text-ink-hi active:scale-[0.97] disabled:pointer-events-none disabled:opacity-30";
+    "flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-2 py-1 text-xs text-ink-mid transition hover:bg-bg-hover hover:text-ink-hi active:scale-[0.97] disabled:pointer-events-none disabled:opacity-30";
 
   // The same controls sit in the toolbar and on the full-screen bar.
   const actions = (
@@ -786,7 +766,7 @@ export function VncView({ session, conn }: { session: Session; conn: Connection 
         <ScanText size={14} />
         Copy text
       </button>
-      <div className="mx-1 h-4 w-px bg-edge" />
+      <div className="mx-1 h-4 w-px shrink-0 bg-edge" />
       <button
         onClick={toggleFit}
         className={toolBtn}
@@ -811,14 +791,7 @@ export function VncView({ session, conn }: { session: Session; conn: Connection 
         {viewOnly ? <EyeOff size={14} /> : <Eye size={14} />}
         {viewOnly ? "View only" : "Control"}
       </button>
-      <button
-        onClick={() => toggleFull()}
-        className={toolBtn}
-        title={full ? "Leave full screen (Ctrl+Alt+Enter)" : "Full screen (Ctrl+Alt+Enter)"}
-      >
-        {full ? <Shrink size={14} /> : <Fullscreen size={14} />}
-        {full && "Exit"}
-      </button>
+      <FullScreenButton className={toolBtn} label />
     </>
   );
 
@@ -826,7 +799,8 @@ export function VncView({ session, conn }: { session: Session; conn: Connection 
     <div
       className={cn(
         "flex flex-col",
-        full ? "fixed inset-0 z-[70] bg-black" : "relative h-full w-full bg-bg-base effect-base"
+        "relative h-full w-full",
+        full ? "bg-black" : "bg-bg-base effect-base"
       )}
     >
       {!full && (
@@ -855,23 +829,25 @@ export function VncView({ session, conn }: { session: Session; conn: Connection 
       )}
 
       {full && (
-        // A thin strip along the top edge; touching it slides the bar down.
-        // Only the strip and the bar take the pointer, so the rest of the
-        // screen's top stays clickable.
-        <div className="group pointer-events-none absolute inset-x-0 top-0 z-20 flex justify-center">
-          <div className="pointer-events-auto absolute inset-x-0 top-0 h-1" />
+        // The toolbar's controls, on a bar that slides down with the tab bar
+        // when the pointer touches the top edge (and on its own for a note).
+        // Only the bar takes the pointer, so the screen's top stays usable.
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex justify-center px-2">
           <div
+            onMouseEnter={() => revealChrome(true)}
+            onMouseLeave={() => revealChrome(false)}
             className={cn(
-              "pointer-events-auto relative mt-1 flex items-center gap-1 rounded-lg border border-edge bg-bg-panel/95 py-1 pl-3 pr-1 shadow-[0_12px_32px_-8px_rgba(0,0,0,0.9)] backdrop-blur-sm transition-transform duration-150",
-              barShown ? "translate-y-0" : "-translate-y-[calc(100%+8px)] group-hover:translate-y-0"
+              "pointer-events-auto relative flex min-w-0 max-w-full items-center gap-1 rounded-lg border border-edge bg-bg-panel/95 py-1 pl-3 pr-1 shadow-[0_12px_32px_-8px_rgba(0,0,0,0.9)] backdrop-blur-sm transition-transform duration-150",
+              revealed ? "mt-11" : "mt-1",
+              revealed || barShown ? "translate-y-0" : "-translate-y-[calc(100%+48px)]"
             )}
           >
             <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${statusColor}`} />
-            <span className="ml-1 shrink-0 font-mono text-[10.5px] text-ink-dim">{target}</span>
-            <span className="ml-2 max-w-[280px] truncate font-mono text-[10.5px] text-ink-mid">
+            <span className="ml-1 min-w-0 truncate font-mono text-[10.5px] text-ink-dim">{target}</span>
+            <span className="ml-2 min-w-0 max-w-[280px] truncate font-mono text-[10.5px] text-ink-mid">
               {note || "Ctrl+Alt+Enter leaves full screen"}
             </span>
-            <div className="mx-1 h-4 w-px bg-edge" />
+            <div className="mx-1 h-4 w-px shrink-0 bg-edge" />
             {actions}
           </div>
         </div>

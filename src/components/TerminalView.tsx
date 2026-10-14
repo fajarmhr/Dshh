@@ -67,6 +67,7 @@ import {
   splitPasteLines,
   timestamp,
 } from "../lib/utils";
+import { FullScreenButton } from "./FullScreenButton";
 
 /** Font sizes Ctrl+scroll zooms between — the connection dialog's range. */
 const FONT_MIN = 8;
@@ -941,6 +942,7 @@ export function TerminalView({
             {recording ? <CircleStop size={14} /> : <Circle size={14} />}
             {recording ? "Logging" : "Log"}
           </button>
+          <FullScreenButton />
         </div>
       </div>
 

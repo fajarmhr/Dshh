@@ -27,6 +27,15 @@ browser.
 ## Features
 
 - **Multi-protocol tabs** — SSH, SFTP, FTP, Telnet, VNC and Serial from one window.
+- **Full screen** — any session, or both halves of a split view, across the
+  whole monitor: `Ctrl+Alt+Enter` or the button in the tab bar or any toolbar.
+  The sidebar, tabs and bottom bar step aside; touching the top edge slides
+  the tab bar back down. The shortcut never reaches the terminal or the VM.
+- **Groups** — hover a saved session and click its folder button to move it
+  into a group: pick one from the list (with counts), or type a name to create
+  it. The connection form's Group field is the same picker.
+- **Help** — Settings › Help explains every feature and how to use it, with a
+  search box and the keyboard shortcuts.
 - **VNC remote desktop** — the remote screen in a tab, with keyboard, mouse,
   clipboard both ways, fit-to-tab or 1:1, view-only and Ctrl+Alt+Del, or
   **full screen** across the whole monitor (Ctrl+Alt+Enter, or the bar at the

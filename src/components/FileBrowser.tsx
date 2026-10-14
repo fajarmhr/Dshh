@@ -80,6 +80,7 @@ import type { Connection, RemoteFile, Session } from "../lib/types";
 import { formatBytes, formatDate, isAuthFailure } from "../lib/utils";
 import { useSaveConnectionPref, wheelSteps } from "../lib/zoom";
 import { downloadPath } from "../lib/localPaths";
+import { FullScreenButton } from "./FullScreenButton";
 
 /** A bulk action waiting on its dialog. */
 type PendingAction =
@@ -1113,6 +1114,7 @@ export function FileBrowser({
           title="Filters this folder as you type · Enter searches subfolders too · * is a wildcard"
         />
         <ViewMenu prefs={view} onChange={setView} />
+        <FullScreenButton />
       </div>
 
       {search && (

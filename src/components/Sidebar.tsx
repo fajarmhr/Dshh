@@ -12,6 +12,7 @@ import {
   Pencil,
   Trash2,
   Copy,
+  FolderInput,
   ChevronDown,
   ChevronRight,
   Search,
@@ -22,6 +23,7 @@ import { buildFilter } from "../lib/utils";
 import { useStore } from "../store";
 import { localOpenAdmin } from "../lib/api";
 import { LocalLauncher } from "./LocalLauncher";
+import { GroupMenu } from "./GroupPicker";
 import { ConsoleLinkModal } from "./ConsoleLinkModal";
 import {
   PROTOCOL_COLORS,
@@ -75,6 +77,12 @@ export function Sidebar({
   const openSession = useStore((s) => s.openSession);
   const removeConnection = useStore((s) => s.removeConnection);
   const duplicateConnection = useStore((s) => s.duplicateConnection);
+  const updateConnection = useStore((s) => s.updateConnection);
+  /** The saved session whose "Move to group" menu is open, and its button. */
+  const [groupFor, setGroupFor] = useState<{ conn: Connection; anchor: HTMLElement } | null>(
+    null
+  );
+  const closeGroupMenu = useCallback(() => setGroupFor(null), []);
   const collapseByDefault = useStore((s) => s.settings.collapseGroupsByDefault);
   // Per-group deviations from the default fold state. Deliberately not
   // persisted, so groups return to the default on the next launch.
@@ -327,6 +335,19 @@ export function Sidebar({
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
+                            const anchor = e.currentTarget;
+                            setGroupFor((g) => (g?.conn.id === c.id ? null : { conn: c, anchor }));
+                          }}
+                          className={`rounded p-1 hover:bg-bg-elev hover:text-ink-hi ${
+                            groupFor?.conn.id === c.id ? "text-accent" : "text-ink-dim"
+                          }`}
+                          title={c.group?.trim() ? `Group: ${c.group.trim()} — move to another` : "Add to a group"}
+                        >
+                          <FolderInput size={13} />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
                             onEdit(c);
                           }}
                           className="rounded p-1 text-ink-dim hover:bg-bg-elev hover:text-ink-hi"
@@ -373,6 +394,18 @@ export function Sidebar({
       </div>
 
       {consoleLinkOpen && <ConsoleLinkModal onClose={() => setConsoleLinkOpen(false)} />}
+
+      {groupFor && (
+        <GroupMenu
+          anchor={groupFor.anchor}
+          value={groupFor.conn.group}
+          onPick={(group) => {
+            updateConnection(groupFor.conn.id, { group });
+            setGroupFor(null);
+          }}
+          onClose={closeGroupMenu}
+        />
+      )}
 
       {/* Drag handle: sits over the right border, widens the hit area without
           shifting layout. Turns accent-colored while hovered or dragging. */}

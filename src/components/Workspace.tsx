@@ -1,5 +1,8 @@
+import { useEffect } from "react";
 import { PanelRightClose } from "lucide-react";
 import { useStore } from "../store";
+import { revealChrome, setFullScreen, useFullScreen } from "../lib/fullscreen";
+import { cn } from "../lib/utils";
 import { TabBar } from "./TabBar";
 import { TerminalView } from "./TerminalView";
 import { FileBrowser } from "./FileBrowser";
@@ -13,6 +16,13 @@ export function Workspace() {
   const connections = useStore((s) => s.connections);
   const transientConnections = useStore((s) => s.transientConnections);
   const toggleSplit = useStore((s) => s.toggleSplitSession);
+  const full = useFullScreen((s) => s.on);
+  const revealed = useFullScreen((s) => s.revealed);
+
+  // Nothing left to show full screen.
+  useEffect(() => {
+    if (full && sessions.length === 0) setFullScreen(false);
+  }, [full, sessions.length]);
 
   const active = sessions.find((s) => s.id === activeId) || null;
   const split =
@@ -21,8 +31,8 @@ export function Workspace() {
       : null;
 
   return (
-    <main className="flex min-w-0 flex-1 flex-col bg-bg-base effect-base">
-      <TabBar />
+    <main className="relative flex min-w-0 flex-1 flex-col bg-bg-base effect-base">
+      {!full && <TabBar />}
       <div className="relative min-h-0 flex-1">
         {sessions.length === 0 && (
           <div className="flex h-full items-center">
@@ -102,7 +112,28 @@ export function Workspace() {
           </div>
         )}
       </div>
-      <BottomDock />
+      <div className={full ? "hidden" : "contents"}>
+        <BottomDock />
+      </div>
+
+      {full && (
+        // Full screen: a thin strip along the top edge slides the tab bar
+        // down over the panes, to switch sessions or leave full screen.
+        <div
+          className="absolute inset-x-0 top-0 z-40 h-1"
+          onMouseEnter={() => revealChrome(true)}
+          onMouseLeave={() => revealChrome(false)}
+        >
+          <div
+            className={cn(
+              "absolute inset-x-0 top-0 shadow-[0_12px_32px_-8px_rgba(0,0,0,0.9)] transition-transform duration-150",
+              revealed ? "translate-y-0" : "-translate-y-full"
+            )}
+          >
+            <TabBar />
+          </div>
+        </div>
+      )}
     </main>
   );
 }
