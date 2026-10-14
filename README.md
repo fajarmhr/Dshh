@@ -39,7 +39,9 @@ browser.
   from the clipboard) and the VM's console opens in a tab: Dshh speaks the
   noVNC proxy's WebSocket itself, no browser involved. Save the proxy as a
   connection — its host can be picked from a saved SSH session — and only
-  the short-lived token is asked for each time.
+  the short-lived token is asked for each time. An open console is kept
+  busy so proxies don't drop it as idle, and if it drops anyway it
+  reconnects on its own with the same token while the proxy accepts it.
 - **SSH jump host** — reach servers behind a bastion (`ssh -J` style, one hop);
   configure it per connection, password or key auth for the hop.
 - **Multi-execution** — the Broadcast toggle mirrors typed input to every

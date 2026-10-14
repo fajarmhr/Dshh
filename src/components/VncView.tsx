@@ -37,6 +37,13 @@ const SCALE_MAX = 4;
 const SCALE_STEP = 1.1;
 /** Wheel travel (px) per scroll click sent to the server: one mouse notch. */
 const WHEEL_STEP = 100;
+/**
+ * Waits before each automatic reconnect after a console drops: quick for a
+ * network blip, then spaced out, about two minutes in all before giving up.
+ */
+const RETRY_DELAYS = [1000, 2000, 5000, 10_000, 20_000, 30_000, 30_000];
+/** A console up this long before it dropped gets a fresh set of retries. */
+const RETRY_STABLE_MS = 30_000;
 
 const PKT_RECT = 1;
 const PKT_RESIZE = 2;
@@ -74,6 +81,8 @@ export function VncView({ session, conn }: { session: Session; conn: Connection 
   const viewOnlyRef = useRef(false);
   /** Last clipboard text exchanged either way, so it isn't echoed back. */
   const lastClipRef = useRef<string | null>(null);
+  /** Automatic console reconnects: the pending timer, retries used, last connect time. */
+  const retryRef = useRef({ timer: 0, attempt: 0, since: 0 });
 
   const setStatus = useStore((s) => s.setSessionStatus);
   const settings = useStore((s) => s.settings);
@@ -103,6 +112,8 @@ export function VncView({ session, conn }: { session: Session; conn: Connection 
   const [typePending, setTypePending] = useState<string | null>(null);
   const [connectedAt, setConnectedAt] = useState<number | null>(null);
   const [uptime, setUptime] = useState("");
+  /** A dropped console is waiting to reconnect on its own. */
+  const [retrying, setRetrying] = useState(false);
 
   viewOnlyRef.current = viewOnly;
   const isConsole = conn.vncMode === "console";
@@ -179,11 +190,14 @@ export function VncView({ session, conn }: { session: Session; conn: Connection 
   /**
    * Open the backend session. `secret` overrides the saved password (and
    * fills a missing username) for this attempt only, as in TerminalView.
+   * `auto` marks a reconnect Dshh started itself after a console dropped.
    */
-  const connect = async (secret?: { password: string; username?: string }) => {
+  const connect = async (secret?: { password: string; username?: string }, auto = false) => {
     const life = lifeRef.current;
     if (backendId.current || connectingRef.current) return;
+    window.clearTimeout(retryRef.current.timer);
     if (isConsole && !tokenRef.current) {
+      setRetrying(false);
       setTokenAsk({});
       return;
     }
@@ -247,6 +261,9 @@ export function VncView({ session, conn }: { session: Session; conn: Connection 
       setConnectedAt(Date.now());
       setStatus(session.id, "connected");
       setAuthError(null);
+      setRetrying(false);
+      retryRef.current.since = Date.now();
+      if (auto) setNote("Reconnected");
 
       // Accepted, so now it's worth keeping — never before, or a second wrong
       // guess could overwrite a working password.
@@ -267,8 +284,12 @@ export function VncView({ session, conn }: { session: Session; conn: Connection 
       if (life.dead) return;
       const message = String(e);
       setStatus(session.id, "error", message);
+      setRetrying(false);
       if (isAuthFailure(message)) setAuthError(message);
       else if (isConsole && /token|console proxy/i.test(message)) setTokenAsk({ error: message });
+      // Anything else (network down, proxy unreachable) may pass; the token
+      // is still worth trying until the proxy says otherwise.
+      else if (auto) retryLater();
     } finally {
       if (lifeRef.current === life) connectingRef.current = false;
       setAuthBusy(false);
@@ -284,7 +305,31 @@ export function VncView({ session, conn }: { session: Session; conn: Connection 
     setConnectedAt(null);
     const failed = reason !== "connection closed";
     setStatus(session.id, failed ? "error" : "closed", failed ? reason : undefined);
+    // The token was only checked when the console opened, and is usually
+    // still good for a while: reconnect with it straight away rather than
+    // wait for a click, by which time it may have expired.
+    if (isConsole) {
+      const r = retryRef.current;
+      if (Date.now() - r.since >= RETRY_STABLE_MS) r.attempt = 0;
+      retryLater();
+    }
   };
+
+  /** Schedule the next automatic reconnect, or give up once they're spent. */
+  const retryLater = () => {
+    const r = retryRef.current;
+    const delay = RETRY_DELAYS[r.attempt];
+    if (delay === undefined) {
+      setRetrying(false);
+      return;
+    }
+    r.attempt++;
+    setRetrying(true);
+    window.clearTimeout(r.timer);
+    r.timer = window.setTimeout(() => connectRef.current(undefined, true), delay);
+  };
+  const connectRef = useRef(connect);
+  connectRef.current = connect;
 
   useEffect(() => {
     const life = { dead: false };
@@ -335,6 +380,7 @@ export function VncView({ session, conn }: { session: Session; conn: Connection 
 
     return () => {
       life.dead = true;
+      window.clearTimeout(retryRef.current.timer);
       canvas.removeEventListener("wheel", onWheel);
       cancelAnimationFrame(moveRafRef.current);
       if (backendId.current) {
@@ -532,9 +578,10 @@ export function VncView({ session, conn }: { session: Session; conn: Connection 
   const reconnect = () => {
     if (connectingRef.current) return;
     setAuthError(null);
-    // Console tokens are usually single-use: offer the last one, but let a
-    // fresh link be pasted.
-    if (isConsole) setTokenAsk({});
+    // Mid-retry, just try the same token now. Otherwise the token may well
+    // have expired: offer the last one, but let a fresh link be pasted.
+    if (retrying) connect(undefined, true);
+    else if (isConsole) setTokenAsk({});
     else connect();
   };
 
@@ -722,7 +769,11 @@ export function VncView({ session, conn }: { session: Session; conn: Connection 
       {dropped && !connectingRef.current && !authError && !tokenAsk && (
         <div className="absolute left-1/2 top-12 z-10 flex -translate-x-1/2 animate-fade-up items-center gap-3 rounded-lg border border-edge bg-bg-panel/95 py-1.5 pl-3 pr-1.5 shadow-[0_12px_32px_-8px_rgba(4,10,20,0.8)] backdrop-blur-sm">
           <span className="font-mono text-[11px] text-ink-mid">
-            {session.status === "error" ? "connection failed" : "connection closed"}
+            {retrying
+              ? "connection lost · reconnecting…"
+              : session.status === "error"
+                ? "connection failed"
+                : "connection closed"}
           </span>
           <button
             onClick={reconnect}

@@ -28,7 +28,7 @@ use crate::{next_id, AppState, Connection};
 use serde::Serialize;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use tauri::ipc::{Channel, InvokeResponseBody};
 use tauri::State;
 use tokio::io::{
@@ -36,6 +36,7 @@ use tokio::io::{
 };
 use tokio::net::TcpStream;
 use tokio::sync::mpsc;
+use tokio::time::Instant;
 
 /// Any duplex byte stream a session can run over: TCP, TLS, an SSH channel,
 /// or the WebSocket adapter.
@@ -61,8 +62,13 @@ const ENC_QEMU_EXT_KEY: i32 = -258;
 /// Undrawn screen packets allowed before we stop requesting updates.
 const MAX_IN_FLIGHT: u32 = 2;
 /// A still screen sends nothing, and reverse proxies drop idle WebSockets
-/// (nginx's default is 60 s), so poke the server this often when quiet.
-const KEEPALIVE: Duration = Duration::from_secs(20);
+/// (nginx's default is 60 s, console proxies are often set lower) — and a
+/// console token is only good for opening the connection, so once it drops,
+/// it's gone. Poke the server once it has been quiet this long…
+const KEEPALIVE: Duration = Duration::from_secs(15);
+/// …checking this often, so the line is never silent for longer than the two
+/// together. (Checking only every `KEEPALIVE` let it go quiet for twice that.)
+const KEEPALIVE_CHECK: Duration = Duration::from_secs(5);
 
 const CONSOLE_TOKEN_HINT: &str = "The console proxy closed the session before VNC started. \
      Console tokens are short-lived and often single-use — get a fresh console link and try again.";
@@ -428,7 +434,7 @@ async fn write_loop(
     let mut in_flight = 0u32;
     let mut pending = false;
     let mut last_update = Instant::now();
-    let mut keepalive = tokio::time::interval(KEEPALIVE);
+    let mut keepalive = tokio::time::interval(KEEPALIVE_CHECK);
     keepalive.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     keepalive.tick().await; // the first tick is immediate
     loop {
@@ -905,6 +911,31 @@ mod tests {
         let (s, hello) = start(conn, Some(via), None, frames, events).await.expect("connect");
         assert_eq!((hello.width, hello.height), (800, 600));
         expect_area(&mut rx, &s, 800 * 600).await;
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn keepalive_never_lets_a_still_screen_go_quiet() {
+        let (client, mut server) = tokio::io::duplex(4096);
+        let (_rd, wr) = tokio::io::split(Box::new(client) as BoxStream);
+        let (tx, rx) = mpsc::unbounded_channel();
+        tokio::spawn(write_loop(wr, rx, Arc::new(AtomicBool::new(false)), (800, 600)));
+
+        let mut last = Instant::now();
+        let mut msg = [0u8; 10];
+        for _ in 0..6 {
+            server.read_exact(&mut msg).await.unwrap();
+            assert_eq!(msg[..], fbu_request(false, 0, 0, 1, 1)[..]);
+            let quiet = last.elapsed();
+            assert!(quiet <= KEEPALIVE + KEEPALIVE_CHECK, "quiet for {quiet:?}");
+            // The server answers a moment later with an empty update, as a
+            // still screen would, and the loop goes back to waiting for
+            // changes. (Answering on the tick itself hid the old 2x gap.)
+            tokio::time::sleep(Duration::from_millis(50)).await;
+            tx.send(VncCmd::UpdateDone { w: 800, h: 600, sent: false, full: false }).unwrap();
+            server.read_exact(&mut msg).await.unwrap();
+            assert_eq!(msg[..], fbu_request(true, 0, 0, 800, 600)[..]);
+            last = Instant::now();
+        }
     }
 
     #[test]
