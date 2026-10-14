@@ -52,7 +52,16 @@
            below are the static fallback shown when the API is unreachable. -->
       <div data-changelog>
       <div class="clog">
-        <div class="clog-v"><div style="display:flex;align-items:center;gap:8px;"><span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:#5b8cff;">v1.3.2</span><span style="border-radius:5px;background:rgba(62,207,142,0.1);padding:1px 7px;font-family:'JetBrains Mono',monospace;font-size:10px;color:#3ecf8e;">latest</span></div><div class="clog-d">oct 2026</div></div>
+        <div class="clog-v"><div style="display:flex;align-items:center;gap:8px;"><span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:#5b8cff;">v1.3.3</span><span style="border-radius:5px;background:rgba(62,207,142,0.1);padding:1px 7px;font-family:'JetBrains Mono',monospace;font-size:10px;color:#3ecf8e;">latest</span></div><div class="clog-d">oct 2026</div></div>
+        <div class="clog-body"><div class="clog-h">VNC consoles stay open, even untouched</div>
+          <ul class="clog-ul">
+            <li>Some console proxies hang up on a session nobody has used for a while, however much traffic it carries. A console left alone for a minute now gets its last mouse position sent again &mdash; nothing moves or clicks, but the proxy sees input</li>
+            <li>The VM may count that as input too, so its own screen lock won't start while the console tab is open</li>
+          </ul>
+        </div>
+      </div>
+      <div class="clog">
+        <div class="clog-v"><span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:#5b8cff;">v1.3.2</span><div class="clog-d">oct 2026</div></div>
         <div class="clog-body"><div class="clog-h">VNC consoles stay open</div>
           <ul class="clog-ul">
             <li>An open VNC console no longer times out when left idle: Dshh now sends a little traffic at least every 20 seconds, so console proxies don't drop it as idle, and the short-lived console token isn't needed again while the tab stays connected</li>

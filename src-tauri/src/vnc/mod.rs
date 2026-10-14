@@ -69,6 +69,12 @@ const KEEPALIVE: Duration = Duration::from_secs(15);
 /// …checking this often, so the line is never silent for longer than the two
 /// together. (Checking only every `KEEPALIVE` let it go quiet for twice that.)
 const KEEPALIVE_CHECK: Duration = Duration::from_secs(5);
+/// Some console proxies also hang up on a session nobody has *used* for a
+/// while, whatever else crosses the line. After this long without a key or
+/// pointer event, a console gets its last pointer event again: the same
+/// position and buttons, so nothing moves or clicks, but it counts as input.
+/// (The guest may count it too, so its own screen lock won't kick in.)
+const NUDGE_AFTER: Duration = Duration::from_secs(60);
 
 const CONSOLE_TOKEN_HINT: &str = "The console proxy closed the session before VNC started. \
      Console tokens are short-lived and often single-use — get a fresh console link and try again.";
@@ -225,7 +231,7 @@ async fn start(
             let _ = on_event.send(VncEvent::Closed { reason });
         })
     };
-    let writer = tokio::spawn(write_loop(wr, rx, ext_keys, (w, h)));
+    let writer = tokio::spawn(write_loop(wr, rx, ext_keys, (w, h), console));
 
     let session = VncSession {
         tx,
@@ -425,15 +431,20 @@ fn cut_text(text: &str) -> Vec<u8> {
 
 // ---- Session loops ----
 
+/// `nudge`: repeat the last pointer event while nobody is using the session
+/// (see `NUDGE_AFTER`).
 async fn write_loop(
     mut wr: WriteHalf<BoxStream>,
     mut rx: mpsc::UnboundedReceiver<VncCmd>,
     ext_keys: Arc<AtomicBool>,
     mut size: (u16, u16),
+    nudge: bool,
 ) {
     let mut in_flight = 0u32;
     let mut pending = false;
     let mut last_update = Instant::now();
+    let mut last_input = Instant::now();
+    let mut last_pointer: Option<(u16, u16, u8)> = None;
     let mut keepalive = tokio::time::interval(KEEPALIVE_CHECK);
     keepalive.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     keepalive.tick().await; // the first tick is immediate
@@ -442,14 +453,22 @@ async fn write_loop(
             cmd = rx.recv() => match cmd {
                 None => break,
                 Some(VncCmd::Key { keysym, code, down }) => {
+                    last_input = Instant::now();
                     if code != 0 && ext_keys.load(Ordering::Relaxed) {
                         qemu_key_event(keysym, code, down)
                     } else {
                         key_event(keysym, down)
                     }
                 }
-                Some(VncCmd::Pointer { x, y, buttons }) => pointer_event(x, y, buttons),
-                Some(VncCmd::CutText(text)) => cut_text(&text),
+                Some(VncCmd::Pointer { x, y, buttons }) => {
+                    last_input = Instant::now();
+                    last_pointer = Some((x, y, buttons));
+                    pointer_event(x, y, buttons)
+                }
+                Some(VncCmd::CutText(text)) => {
+                    last_input = Instant::now();
+                    cut_text(&text)
+                }
                 Some(VncCmd::UpdateDone { w, h, sent, full }) => {
                     size = (w, h);
                     last_update = Instant::now();
@@ -475,12 +494,24 @@ async fn write_loop(
                 }
             },
             _ = keepalive.tick() => {
-                if last_update.elapsed() < KEEPALIVE {
+                let mut m = Vec::new();
+                if nudge && last_input.elapsed() >= NUDGE_AFTER {
+                    // Never pointed at yet: the middle of the screen, where
+                    // parking the pointer is least likely to trigger anything.
+                    let (x, y, buttons) = last_pointer.unwrap_or((size.0 / 2, size.1 / 2, 0));
+                    last_pointer = Some((x, y, buttons));
+                    last_input = Instant::now();
+                    m.extend(pointer_event(x, y, buttons));
+                }
+                if last_update.elapsed() >= KEEPALIVE {
+                    // A non-incremental request for one pixel always gets an
+                    // answer, which is all an idle-timeout needs to see.
+                    m.extend(fbu_request(false, 0, 0, 1, 1));
+                }
+                if m.is_empty() {
                     continue;
                 }
-                // A non-incremental request for one pixel always gets an
-                // answer, which is all an idle-timeout needs to see.
-                fbu_request(false, 0, 0, 1, 1)
+                m
             }
         };
         if wr.write_all(&msg).await.is_err() {
@@ -918,7 +949,7 @@ mod tests {
         let (client, mut server) = tokio::io::duplex(4096);
         let (_rd, wr) = tokio::io::split(Box::new(client) as BoxStream);
         let (tx, rx) = mpsc::unbounded_channel();
-        tokio::spawn(write_loop(wr, rx, Arc::new(AtomicBool::new(false)), (800, 600)));
+        tokio::spawn(write_loop(wr, rx, Arc::new(AtomicBool::new(false)), (800, 600), false));
 
         let mut last = Instant::now();
         let mut msg = [0u8; 10];
@@ -936,6 +967,59 @@ mod tests {
             assert_eq!(msg[..], fbu_request(true, 0, 0, 800, 600)[..]);
             last = Instant::now();
         }
+    }
+
+    /// Read one client message the write loop can send unprompted.
+    async fn read_msg(server: &mut tokio::io::DuplexStream) -> Vec<u8> {
+        let kind = server.read_u8().await.unwrap();
+        let len = match kind {
+            3 => 10, // FramebufferUpdateRequest
+            5 => 6,  // PointerEvent
+            other => panic!("unexpected client message {other}"),
+        };
+        let mut msg = vec![kind; len];
+        server.read_exact(&mut msg[1..]).await.unwrap();
+        msg
+    }
+
+    /// Wait for the next pointer nudge, answering keepalives as a still
+    /// screen would.
+    async fn next_nudge(
+        server: &mut tokio::io::DuplexStream,
+        tx: &mpsc::UnboundedSender<VncCmd>,
+    ) -> Vec<u8> {
+        loop {
+            let msg = read_msg(server).await;
+            if msg[0] == 5 {
+                return msg;
+            }
+            if msg == fbu_request(false, 0, 0, 1, 1) {
+                tokio::time::sleep(Duration::from_millis(50)).await;
+                tx.send(VncCmd::UpdateDone { w: 800, h: 600, sent: false, full: false }).unwrap();
+            }
+        }
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn idle_console_is_nudged_where_the_pointer_was() {
+        let (client, mut server) = tokio::io::duplex(4096);
+        let (_rd, wr) = tokio::io::split(Box::new(client) as BoxStream);
+        let (tx, rx) = mpsc::unbounded_channel();
+        tokio::spawn(write_loop(wr, rx, Arc::new(AtomicBool::new(false)), (800, 600), true));
+
+        // Nobody has pointed yet: the middle of the screen, buttons up.
+        let start = Instant::now();
+        assert_eq!(next_nudge(&mut server, &tx).await, pointer_event(400, 300, 0));
+        let waited = start.elapsed();
+        assert!(waited >= NUDGE_AFTER && waited <= NUDGE_AFTER + KEEPALIVE_CHECK, "{waited:?}");
+
+        // Once the user has pointed somewhere, that's what gets repeated,
+        // and only after a full idle spell.
+        tx.send(VncCmd::Pointer { x: 10, y: 20, buttons: 0 }).unwrap();
+        assert_eq!(read_msg(&mut server).await, pointer_event(10, 20, 0));
+        let pointed = Instant::now();
+        assert_eq!(next_nudge(&mut server, &tx).await, pointer_event(10, 20, 0));
+        assert!(pointed.elapsed() >= NUDGE_AFTER, "{:?}", pointed.elapsed());
     }
 
     #[test]
