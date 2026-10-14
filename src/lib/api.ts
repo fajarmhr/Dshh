@@ -279,6 +279,36 @@ export const ftpUpload = (
 ) => invoke("ftp_upload", { id, local, remote, onProgress: progressChannel(onProgress) });
 export const ftpDisconnect = (id: string) => invoke("ftp_disconnect", { id });
 
+// ---- Server-to-server copy (runs on server A, data never passes through here) ----
+/** What a copy got through; `failed` is only ever set for an FTP server B. */
+export interface PeerCopyReport {
+  files: number;
+  failed: number;
+  firstError: string | null;
+  /** Folders under the selection that couldn't be listed. */
+  unreadable: number;
+}
+export interface PeerCopyArgs {
+  /** Server A: the SFTP session the file browser holds. */
+  id: string;
+  /** Server B as it authenticated here — its credentials are used on A. */
+  peer: Connection;
+  /** Server B's own SFTP/FTP session from this PC, for walking and folders. */
+  peerId: string;
+  /** Where A dials B (`host[:port]`); null for B's own address. */
+  route: string | null;
+  /** `push`: A's files to B. `pull`: B's files to A. */
+  direction: "push" | "pull";
+  items: FileTarget[];
+  /** Destination folder on the receiving server. */
+  dest: string;
+  /** Names the copy for `peerCancel`. */
+  job: string;
+}
+export const peerCopy = (args: PeerCopyArgs, onProgress?: ProgressHandler) =>
+  invoke<PeerCopyReport>("peer_copy", { ...args, onProgress: progressChannel(onProgress) });
+export const peerCancel = (job: string) => invoke("peer_cancel", { job });
+
 // ---- Port forwarding (ssh -L / -R / -D) ----
 export const tunnelStart = (
   conn: Connection,

@@ -7,6 +7,7 @@ mod ftp;
 mod local;
 mod localfs;
 mod logs;
+mod peer;
 mod portable;
 mod progress;
 mod scp;
@@ -109,6 +110,8 @@ pub struct AppState {
     pub telnet: Mutex<HashMap<String, telnet::TelnetSession>>,
     pub edits: Mutex<HashMap<String, edit::EditSession>>,
     pub vnc: Mutex<HashMap<String, vnc::VncSession>>,
+    /// Server-to-server copies in flight, by the job id the frontend chose.
+    pub peer_jobs: Mutex<HashMap<String, std::sync::Arc<tokio::sync::Notify>>>,
 }
 
 static COUNTER: AtomicU64 = AtomicU64::new(1);
@@ -166,6 +169,8 @@ pub fn run() {
             ftp::ftp_tree,
             ftp::ftp_delete,
             ftp::ftp_chmod,
+            peer::peer_copy,
+            peer::peer_cancel,
             logs::log_start,
             logs::log_stop,
             logs::save_text_file,

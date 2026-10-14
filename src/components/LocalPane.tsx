@@ -150,7 +150,7 @@ export function LocalPane({
   return (
     <div
       ref={rootRef}
-      className="relative flex h-full w-1/2 min-w-0 shrink-0 flex-col border-r border-edge bg-bg-base"
+      className="relative flex min-h-0 flex-1 flex-col bg-bg-base"
       onDragOver={(e) => {
         if (e.dataTransfer.types.includes(REMOTE_MIME)) {
           e.preventDefault();

@@ -213,7 +213,7 @@ pub async fn ftp_upload(
 
 /// Walk the selection over one control connection. Symlinks (an `l` in the
 /// listing) are recorded but never descended into.
-fn walk(ftp: &mut FtpStream, targets: &[Target]) -> Result<Tree, String> {
+pub(crate) fn walk(ftp: &mut FtpStream, targets: &[Target]) -> Result<Tree, String> {
     let mut tree = Tree::from_targets(targets);
     let mut stack: Vec<String> = targets
         .iter()
@@ -242,7 +242,7 @@ fn walk(ftp: &mut FtpStream, targets: &[Target]) -> Result<Tree, String> {
 }
 
 /// Run `op` against the session's control connection on a blocking thread.
-async fn with_ftp<T: Send + 'static>(
+pub(crate) async fn with_ftp<T: Send + 'static>(
     state: &AppState,
     id: &str,
     op: impl FnOnce(&mut FtpStream) -> Result<T, String> + Send + 'static,

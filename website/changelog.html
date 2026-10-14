@@ -52,7 +52,19 @@
            below are the static fallback shown when the API is unreachable. -->
       <div data-changelog>
       <div class="clog">
-        <div class="clog-v"><div style="display:flex;align-items:center;gap:8px;"><span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:#5b8cff;">v1.3.0</span><span style="border-radius:5px;background:rgba(62,207,142,0.1);padding:1px 7px;font-family:'JetBrains Mono',monospace;font-size:10px;color:#3ecf8e;">latest</span></div><div class="clog-d">oct 2026</div></div>
+        <div class="clog-v"><div style="display:flex;align-items:center;gap:8px;"><span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:#5b8cff;">v1.3.1</span><span style="border-radius:5px;background:rgba(62,207,142,0.1);padding:1px 7px;font-family:'JetBrains Mono',monospace;font-size:10px;color:#3ecf8e;">latest</span></div><div class="clog-d">oct 2026</div></div>
+        <div class="clog-body"><div class="clog-h">Copy files straight between two servers</div>
+          <ul class="clog-ul">
+            <li>The split view's second pane can now show another saved server instead of your disk &mdash; pick it from the new source menu. Drag files and folders between the two panes, or select them and press Copy</li>
+            <li>The copy runs on the server itself: Dshh starts OpenSSH's sftp there (or curl when the other server is FTP), so the data goes from server to server and never through your PC. Progress shows as usual, and Stop really ends it on the server</li>
+            <li>The other server's password is typed into the prompt, never put on a command line or written to disk; a key-based login is lent for the length of the copy through agent forwarding, so the key file stays on your PC</li>
+            <li>When a server reaches the other one at a different address than your PC does &mdash; a private IP, an internal name &mdash; set it once from the pane's footer and it is remembered</li>
+            <li>Fixed: in development builds, SSH terminal tabs could stay stuck on &ldquo;connecting&rdquo;</li>
+          </ul>
+        </div>
+      </div>
+      <div class="clog">
+        <div class="clog-v"><span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:#5b8cff;">v1.3.0</span><div class="clog-d">oct 2026</div></div>
         <div class="clog-body"><div class="clog-h">VNC remote desktop, bulk file actions and Ctrl+scroll zoom</div>
           <ul class="clog-ul">
             <li>A new VNC tab shows the remote screen with keyboard, mouse and clipboard, scaled to fit or at 1:1, plus view-only and a Ctrl+Alt+Del button. Like every other protocol it runs inside dshh.exe &mdash; no viewer to install</li>

@@ -19,9 +19,9 @@ pub struct SftpConn {
     pub sftp: Arc<SftpSession>,
     /// uid/gid → name, read from the server once and reused for every listing.
     names: Arc<Mutex<Option<Arc<Names>>>>,
-    // Keep the underlying SSH connection (and any jump hop) alive for the
-    // session's lifetime.
-    _handle: Arc<SshHandle>,
+    // Keeps the underlying SSH connection (and any jump hop) alive for the
+    // session's lifetime; server-to-server copies run commands over it too.
+    pub handle: Arc<SshHandle>,
 }
 
 /// Owner names for the numeric ids SFTP puts on the wire. SFTP v3 — what
@@ -110,7 +110,15 @@ async fn conn_of(
 
 #[tauri::command]
 pub async fn sftp_connect(conn: Connection, state: State<'_, AppState>) -> Result<String, String> {
-    let handle = connect_and_auth(&conn).await?;
+    let c = open(&conn).await?;
+    let id = next_id("sftp");
+    state.sftp.lock().await.insert(id.clone(), c);
+    Ok(id)
+}
+
+/// Connect, authenticate and start the SFTP subsystem.
+pub(crate) async fn open(conn: &Connection) -> Result<SftpConn, String> {
+    let handle = connect_and_auth(conn).await?;
 
     let channel = handle
         .channel_open_session()
@@ -125,16 +133,11 @@ pub async fn sftp_connect(conn: Connection, state: State<'_, AppState>) -> Resul
         .await
         .map_err(|e| format!("SFTP init failed: {e}"))?;
 
-    let id = next_id("sftp");
-    state.sftp.lock().await.insert(
-        id.clone(),
-        SftpConn {
-            sftp: Arc::new(sftp),
-            names: Arc::new(Mutex::new(None)),
-            _handle: Arc::new(handle),
-        },
-    );
-    Ok(id)
+    Ok(SftpConn {
+        sftp: Arc::new(sftp),
+        names: Arc::new(Mutex::new(None)),
+        handle: Arc::new(handle),
+    })
 }
 
 #[tauri::command]
@@ -261,7 +264,7 @@ pub async fn sftp_disconnect(id: String, state: State<'_, AppState>) -> Result<(
 /// (that is what OpenSSH's READDIR sends), so a symlinked folder shows up as
 /// a link and is never descended into — deleting a selection can't wander
 /// off through a link into somewhere else.
-async fn walk(sftp: &SftpSession, targets: &[Target]) -> Result<Tree, String> {
+pub(crate) async fn walk(sftp: &SftpSession, targets: &[Target]) -> Result<Tree, String> {
     let mut tree = Tree::from_targets(targets);
     let mut stack: Vec<String> = targets
         .iter()

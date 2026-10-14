@@ -560,7 +560,9 @@ export function TerminalView({
         if (retryField && isAuthFailure(message)) setAuthError(message);
       }
     } finally {
-      connectingRef.current = false;
+      // A StrictMode remount resets the guard for its own life; a handshake
+      // from the previous life finishing late must not clear the new one's.
+      if (lifeRef.current === life) connectingRef.current = false;
       setAuthBusy(false);
     }
   };
@@ -569,6 +571,10 @@ export function TerminalView({
     if (!containerRef.current) return;
     const life = { dead: false };
     lifeRef.current = life;
+    // Under StrictMode the first mount's handshake is still in flight here;
+    // without this reset the remount's connect() would bail out and the tab
+    // would sit on "connecting" once that orphaned handshake is discarded.
+    connectingRef.current = false;
 
     // Read through the ref: this effect must not re-run on appearance changes
     // (that would tear down the connection), so a separate effect pushes later

@@ -27,7 +27,7 @@ import {
  * panes keep separate choices — sorting a server by date says nothing about
  * how you like your Downloads folder.
  */
-export function useFileViewPrefs(scope: "remote" | "local") {
+export function useFileViewPrefs(scope: "remote" | "local" | "peer") {
   const key = `dshh.fileview.${scope}.v1`;
   const [prefs, setPrefs] = useState<FileViewPrefs>(() => {
     try {

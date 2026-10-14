@@ -21,12 +21,28 @@ pub struct ForwardTarget {
     pub stats: Arc<TunnelStats>,
 }
 
+/// Which keys answer when the server opens an agent channel back to us — the
+/// forwarded agent a server-to-server copy lends to the `sftp` it runs.
+#[derive(Clone)]
+pub enum AgentSource {
+    /// One private key loaded from disk, served by Dshh itself.
+    Key(Arc<PrivateKey>),
+    /// The agent running on this PC (OpenSSH's, else Pageant), relayed as-is.
+    Local,
+}
+
+/// Set for the length of one copy and cleared after it, so the server can
+/// only borrow the agent while something Dshh started is using it.
+pub type AgentSlot = Arc<std::sync::Mutex<Option<AgentSource>>>;
+
 /// russh client handler. We accept the host key on first use (TOFU-style).
 /// A production build would persist and verify known-hosts here.
 pub struct ClientHandler {
     /// Set only on the dedicated connection behind a remote forward; every
     /// other connection leaves this `None` and declines forwarded channels.
     forward: Option<ForwardTarget>,
+    /// Empty unless a server-to-server copy is lending an agent.
+    agent: AgentSlot,
 }
 
 impl Handler for ClientHandler {
@@ -64,6 +80,25 @@ impl Handler for ClientHandler {
         });
         Ok(())
     }
+
+    /// The server's side of agent forwarding: `ssh` on the far end wants to
+    /// sign with a key. Only honoured while a copy has filled the slot.
+    async fn server_channel_open_agent_forward(
+        &mut self,
+        channel: russh::Channel<Msg>,
+        _session: &mut Session,
+    ) -> Result<(), Self::Error> {
+        let source = self.agent.lock().ok().and_then(|slot| slot.clone());
+        tokio::spawn(async move {
+            match source {
+                Some(source) => crate::peer::serve_agent(channel, source).await,
+                None => {
+                    let _ = channel.close().await;
+                }
+            }
+        });
+        Ok(())
+    }
 }
 
 pub enum SshCmd {
@@ -84,6 +119,8 @@ pub struct SshSession {
 pub struct SshHandle {
     handle: Handle<ClientHandler>,
     _jump: Option<Box<SshHandle>>,
+    /// The handler's agent slot, reachable from outside the event loop.
+    pub agent: AgentSlot,
 }
 
 impl std::ops::Deref for SshHandle {
@@ -297,30 +334,32 @@ async fn connect_with(
             .channel_open_direct_tcpip(host.clone(), port as u32, "127.0.0.1", 0)
             .await
             .map_err(|e| format!("Jump host cannot reach {host}:{port}: {e}"))?;
+        let agent = AgentSlot::default();
         let connect_fut = client::connect_stream(
             ssh_config(),
             channel.into_stream(),
-            ClientHandler { forward },
+            ClientHandler { forward, agent: agent.clone() },
         );
         let mut handle = tokio::time::timeout(std::time::Duration::from_secs(15), connect_fut)
             .await
             .map_err(|_| format!("Connection to {host}:{port} via jump timed out"))?
             .map_err(|e| format!("Connect via jump failed: {e}"))?;
         authenticate(&mut handle, conn).await?;
-        return Ok(SshHandle { handle, _jump: Some(Box::new(jump)) });
+        return Ok(SshHandle { handle, _jump: Some(Box::new(jump)), agent });
     }
 
+    let agent = AgentSlot::default();
     let connect_fut = client::connect(
         ssh_config(),
         (host.as_str(), port),
-        ClientHandler { forward },
+        ClientHandler { forward, agent: agent.clone() },
     );
     let mut handle = tokio::time::timeout(std::time::Duration::from_secs(15), connect_fut)
         .await
         .map_err(|_| format!("Connection to {host}:{port} timed out"))?
         .map_err(|e| format!("Connect failed: {e}"))?;
     authenticate(&mut handle, conn).await?;
-    Ok(SshHandle { handle, _jump: None })
+    Ok(SshHandle { handle, _jump: None, agent })
 }
 
 #[tauri::command]

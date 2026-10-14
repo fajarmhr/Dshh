@@ -1,4 +1,4 @@
-import { ArrowDownToLine, ArrowUpFromLine } from "lucide-react";
+import { ArrowDownToLine, ArrowUpFromLine, Square } from "lucide-react";
 import type { TransferProgress } from "../lib/api";
 import { formatBytes } from "../lib/utils";
 
@@ -19,7 +19,14 @@ export interface Transfer extends TransferProgress {
  * Framing is the caller's: this draws the row only, so it can sit in a status
  * strip or inside a dialog without a doubled border.
  */
-export function TransferBar({ transfer }: { transfer: Transfer }) {
+export function TransferBar({
+  transfer,
+  onStop,
+}: {
+  transfer: Transfer;
+  /** Offered as a stop button at the end of the row. */
+  onStop?: () => void;
+}) {
   const { name, dir, done, total, batch } = transfer;
   const known = total > 0;
   const pct = known ? Math.min(100, Math.round((done / total) * 100)) : 0;
@@ -39,6 +46,15 @@ export function TransferBar({ transfer }: { transfer: Transfer }) {
           {known ? `${formatBytes(done)} / ${formatBytes(total)}` : formatBytes(done)}
         </span>
         {known && <span className="w-9 shrink-0 text-right tabular-nums">{pct}%</span>}
+        {onStop && (
+          <button
+            onClick={onStop}
+            className="-my-1 shrink-0 rounded p-1 text-ink-dim transition hover:bg-err/15 hover:text-err"
+            title="Stop"
+          >
+            <Square size={10} />
+          </button>
+        )}
       </div>
       <div className="mt-1 h-1 overflow-hidden rounded-full bg-bg-inset">
         {known ? (

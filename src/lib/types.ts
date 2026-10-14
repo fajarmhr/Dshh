@@ -85,6 +85,12 @@ export interface Connection {
   fileZoom?: number;
   /** VNC screen scale set with Ctrl+scroll; absent means fit to the tab. */
   vncScale?: number;
+  /**
+   * Where this server reaches others for a server-to-server copy, by their
+   * connection id — `host` or `host:port`, for when it sees them at another
+   * address than this PC does. Absent means the other server's own address.
+   */
+  peerRoutes?: Record<string, string>;
   // SSH extras
   tunnels?: TunnelDef[];
   // Optional SSH jump host (bastion) — one hop.

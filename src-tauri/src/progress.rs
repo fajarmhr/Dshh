@@ -48,6 +48,16 @@ impl Reporter {
         }
     }
 
+    /// Jump to an absolute count — for copies that run elsewhere and report
+    /// where they are rather than how much just moved. Those reports are
+    /// rounded ("46MB"), so the count is held to the known total.
+    pub fn set(&mut self, done: u64) {
+        self.done = if self.total > 0 { done.min(self.total) } else { done };
+        if self.last.elapsed() >= TICK {
+            self.emit();
+        }
+    }
+
     /// Final count, always sent, so the bar lands on 100% rather than wherever
     /// the last tick left it.
     pub fn finish(&mut self) {

@@ -2,6 +2,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import {
+  ArrowLeftRight,
   ArrowUp,
   RefreshCw,
   Download,
@@ -18,7 +19,16 @@ import {
   UserCog,
   X,
 } from "lucide-react";
+import { nanoid } from "nanoid";
 import { LocalPane } from "./LocalPane";
+import {
+  dragItems,
+  ITEMS_MIME,
+  PEER_MIME,
+  PeerPane,
+  type DragItem,
+  type PeerHandle,
+} from "./PeerPane";
 import { PasswordPrompt } from "./PasswordPrompt";
 import {
   ChmodDialog,
@@ -61,6 +71,8 @@ import {
   ftpDelete,
   ftpChmod,
   localMkdir,
+  peerCancel,
+  peerCopy,
   type FileTarget,
   type FileTree,
 } from "../lib/api";
@@ -104,18 +116,43 @@ export function FileBrowser({
   const [files, setFiles] = useState<RemoteFile[]>([]);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string>("");
-  const [dragOver, setDragOver] = useState(false);
+  /** Something is being dragged over the list: files to upload, or rows of server B. */
+  const [dragOver, setDragOver] = useState<false | "upload" | "peer">(false);
   /** The transfer currently in flight, driving the progress bar. */
   const [transfer, setTransfer] = useState<Transfer | null>(null);
-  const [showLocal, setShowLocal] = useState(false);
+  /** The split view's second pane, and what it shows: this PC, or a saved server's id. */
+  const [sideOpen, setSideOpen] = useState(false);
+  const [sideSource, setSideSource] = useState("local");
+  const connections = useStore((s) => s.connections);
+  /**
+   * Saved servers the second pane can show. Copies run on this tab's server,
+   * so they need it on SFTP — an FTP tab has no shell to run them in.
+   */
+  const peers = useMemo(
+    () =>
+      connections.filter(
+        (c) => c.id !== conn.id && (c.protocol === "sftp" || c.protocol === "ftp" || c.protocol === "ssh")
+      ),
+    [connections, conn.id]
+  );
+  const peerConn = isSftp ? peers.find((c) => c.id === sideSource) : undefined;
+  /** Server B's live session, once the second pane has it. */
+  const [peer, setPeer] = useState<PeerHandle | null>(null);
+  /** A server-to-server copy in flight, by the job id `peerCancel` takes. */
+  const [peerJob, setPeerJob] = useState<string | null>(null);
+  const peerRoute = (peerConn && conn.peerRoutes?.[peerConn.id]) || "";
   // Editable address bar. Kept as a draft so a half-typed path never becomes
   // the real cwd; navigating elsewhere (click, Up, refresh) resyncs it.
   const [pathDraft, setPathDraft] = useState(cwd);
   /** Server rejected our saved credential; holds the message to show. */
   const [authError, setAuthError] = useState<string | null>(null);
   const [authBusy, setAuthBusy] = useState(false);
-  /** True once the pane is unmounting, so late handshakes clean up after themselves. */
-  const disposedRef = useRef(false);
+  /**
+   * One "life" per mount, marked dead on unmount so late handshakes clean up
+   * after themselves. Per-mount rather than a shared flag: under StrictMode the
+   * remount would otherwise revive the first mount's handshake, leaking it.
+   */
+  const lifeRef = useRef({ dead: false });
   /** Live backend handle, read by cleanup — a retry replaces it mid-life. */
   const backendRef = useRef<string | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -204,9 +241,10 @@ export function FileBrowser({
             ...(secret.username ? { username: secret.username } : {}),
           }
         : conn;
+    const life = lifeRef.current;
     try {
       const id = isSftp ? await sftpConnect(attempt) : await ftpConnect(attempt);
-      if (disposedRef.current) {
+      if (life.dead) {
         // Pane closed mid-handshake — hand the backend handle straight back.
         (isSftp ? sftpDisconnect(id) : ftpDisconnect(id)).catch(() => {});
         return;
@@ -229,7 +267,7 @@ export function FileBrowser({
       }
       await list(id, isSftp ? "." : "/");
     } catch (e) {
-      if (disposedRef.current) return;
+      if (life.dead) return;
       const message = String(e);
       setStatus(session.id, "error", message);
       setMsg(message);
@@ -240,10 +278,11 @@ export function FileBrowser({
   };
 
   useEffect(() => {
-    disposedRef.current = false;
+    const life = { dead: false };
+    lifeRef.current = life;
     openConnection();
     return () => {
-      disposedRef.current = true;
+      life.dead = true;
       searchRun.current++;
       const id = backendRef.current;
       if (id) {
@@ -440,6 +479,68 @@ export function FileBrowser({
     []
   );
 
+  /**
+   * Copy between this server (A) and the one in the second pane (B). The copy
+   * runs on A — see peer.rs — so the bytes never pass through this PC.
+   */
+  const runPeerCopy = async (direction: "push" | "pull", items: DragItem[], dest: string) => {
+    const id = backendId;
+    const b = peer;
+    if (!id || !b || !peerConn || items.length === 0 || peerJob) return;
+    const job = nanoid();
+    setPeerJob(job);
+    const label = items.length === 1 ? items[0].name : `${items.length} items`;
+    const name =
+      direction === "pull" ? `${label} ← ${peerConn.name}` : `${label} → ${peerConn.name}`;
+    const dir = direction === "pull" ? "down" : "up";
+    setMsg(
+      `${conn.name} is copying ${label} ${direction === "pull" ? "from" : "to"} ${peerConn.name}…`
+    );
+    setTransfer({ name, dir, done: 0, total: 0 });
+    try {
+      const r = await peerCopy(
+        {
+          id,
+          peer: b.conn,
+          peerId: b.id,
+          route: peerRoute || null,
+          direction,
+          items: items.map(({ path, isDir, size }) => ({ path, isDir, size })),
+          dest,
+          job,
+        },
+        (p) => setTransfer({ name, dir, ...p })
+      );
+      const skipped = r.unreadable
+        ? ` · ${r.unreadable} unreadable folder${r.unreadable === 1 ? "" : "s"} skipped`
+        : "";
+      setMsg(
+        `Copied ${r.files} file${r.files === 1 ? "" : "s"} ${
+          direction === "pull" ? `from ${peerConn.name}` : `to ${peerConn.name}`
+        } into ${dest}${skipped}${r.failed ? ` — ${r.failed} failed: ${r.firstError ?? ""}` : ""}`
+      );
+    } catch (e) {
+      const m = String(e);
+      setMsg(m === "Stopped" ? "Copy stopped — whatever had arrived stays" : m);
+    } finally {
+      setTransfer(null);
+      setPeerJob(null);
+      if (direction === "pull") list(id, cwdRef.current);
+      else b.refresh();
+    }
+  };
+
+  /** Remember where this server reaches B; "" goes back to B's own address. */
+  const setPeerRoute = (route: string) => {
+    if (!peerConn) return;
+    const routes = { ...(conn.peerRoutes ?? {}) };
+    if (route) routes[peerConn.id] = route;
+    else delete routes[peerConn.id];
+    useStore.getState().setConnectionPrefs(conn.id, {
+      peerRoutes: Object.keys(routes).length ? routes : undefined,
+    });
+  };
+
   // Drag & drop from Explorer: upload into the current directory. The event
   // is window-global, so only react while the pointer is over this pane.
   useEffect(() => {
@@ -455,7 +556,7 @@ export function FileBrowser({
     const unlisten = getCurrentWebview().onDragDropEvent((event) => {
       const p = event.payload;
       if (p.type === "over") {
-        setDragOver(inBounds(p.position));
+        setDragOver(inBounds(p.position) ? "upload" : false);
       } else if (p.type === "drop") {
         setDragOver(false);
         if (inBounds(p.position)) uploadPaths(p.paths);
@@ -768,11 +869,18 @@ export function FileBrowser({
         onClick={(e) => clickRow(e, f)}
         onMouseDown={(e) => e.shiftKey && e.preventDefault()}
         onDoubleClick={() => enter(f)}
-        draggable={!f.isDir}
+        draggable
         onDragStart={(e) => {
+          // The local pane takes single files; server B takes the selection.
+          if (!f.isDir) {
+            e.dataTransfer.setData(
+              "application/x-dshh-remote",
+              JSON.stringify({ path: f.path, name: f.name })
+            );
+          }
           e.dataTransfer.setData(
-            "application/x-dshh-remote",
-            JSON.stringify({ path: f.path, name: f.name })
+            ITEMS_MIME,
+            JSON.stringify(dragItems(isSelected ? selectedItems : [f]))
           );
           e.dataTransfer.effectAllowed = "copy";
         }}
@@ -865,25 +973,79 @@ export function FileBrowser({
   const selFiles = selectedItems.filter((f) => !f.isDir).length;
   const selDirs = selectedItems.length - selFiles;
   const barBtn =
-    "flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[11.5px] text-ink-mid transition hover:bg-bg-hover hover:text-ink-hi disabled:pointer-events-none disabled:opacity-30";
+    "flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-2 py-0.5 text-[11.5px] text-ink-mid transition hover:bg-bg-hover hover:text-ink-hi disabled:pointer-events-none disabled:opacity-30";
 
   return (
     <div ref={rootRef} className="flex h-full bg-bg-base">
-      {showLocal && <LocalPane onRemoteDrop={downloadTo} />}
+      {sideOpen && (
+        <div className="flex h-full w-1/2 min-w-0 shrink-0 flex-col border-r border-edge">
+          <div className="flex h-8 shrink-0 items-center gap-2 border-b border-edge bg-bg-panel px-2">
+            <span className="micro-label shrink-0">source</span>
+            <select
+              value={peerConn ? peerConn.id : "local"}
+              onChange={(e) => setSideSource(e.target.value)}
+              disabled={peerJob !== null}
+              aria-label="What the second pane shows"
+              className="h-6 min-w-0 flex-1 rounded-md border border-edge bg-bg-inset px-1.5 text-[12px] text-ink-hi outline-none focus:border-accent"
+            >
+              <option value="local">This PC — local disk</option>
+              {peers.length > 0 && (
+                <optgroup
+                  label={
+                    isSftp
+                      ? `Servers — ${conn.name} copies to and from them directly`
+                      : "Servers — direct copies need this tab on SFTP"
+                  }
+                >
+                  {peers.map((c) => (
+                    <option key={c.id} value={c.id} disabled={!isSftp}>
+                      {c.name} · {c.protocol === "ftp" ? "FTP" : "SFTP"} · {c.host}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+            </select>
+          </div>
+          {peerConn ? (
+            <PeerPane
+              key={peerConn.id}
+              peer={peerConn}
+              hostName={conn.name}
+              route={peerRoute}
+              onRouteChange={setPeerRoute}
+              copying={peerJob !== null || !backendId}
+              onHandle={setPeer}
+              onPull={(items) => runPeerCopy("pull", items, cwd)}
+              onPush={(items, dir) => runPeerCopy("push", items, dir)}
+            />
+          ) : (
+            <LocalPane onRemoteDrop={downloadTo} />
+          )}
+        </div>
+      )}
       <div
         ref={remoteRef}
         className="relative flex h-full min-w-0 flex-1 flex-col"
         onDragOver={(e) => {
-          if (e.dataTransfer.types.includes("application/x-dshh-local")) {
+          const types = e.dataTransfer.types;
+          const fromPeer = types.includes(PEER_MIME) && peer !== null && !peerJob;
+          if (fromPeer || types.includes("application/x-dshh-local")) {
             e.preventDefault();
             e.dataTransfer.dropEffect = "copy";
-            setDragOver(true);
+            setDragOver(fromPeer ? "peer" : "upload");
           }
         }}
         onDragLeave={(e) => {
           if (!remoteRef.current?.contains(e.relatedTarget as Node)) setDragOver(false);
         }}
         onDrop={(e) => {
+          const fromPeer = e.dataTransfer.getData(PEER_MIME);
+          if (fromPeer) {
+            setDragOver(false);
+            e.preventDefault();
+            runPeerCopy("pull", JSON.parse(fromPeer) as DragItem[], cwd);
+            return;
+          }
           const raw = e.dataTransfer.getData("application/x-dshh-local");
           setDragOver(false);
           if (!raw) return;
@@ -895,15 +1057,17 @@ export function FileBrowser({
       {dragOver && (
         <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center rounded-lg border-2 border-dashed border-accent bg-accent/10">
           <span className="rounded-md bg-bg-panel px-3 py-1.5 font-mono text-xs text-accent">
-            drop to upload into {cwd}
+            {dragOver === "peer"
+              ? `drop to copy into ${cwd} — ${conn.name} fetches it from ${peerConn?.name ?? "the other server"}`
+              : `drop to upload into ${cwd}`}
           </span>
         </div>
       )}
       <div className="flex h-9 shrink-0 items-center gap-1 border-b border-edge bg-bg-panel px-2">
         <button
-          onClick={() => setShowLocal((v) => !v)}
-          className={`tb-btn ${showLocal ? "text-accent" : ""}`}
-          title="Split view: local disk pane for drag & drop"
+          onClick={() => setSideOpen((v) => !v)}
+          className={`tb-btn ${sideOpen ? "text-accent" : ""}`}
+          title="Split view: this PC or another saved server, for drag & drop"
         >
           <Columns2 size={15} />
         </button>
@@ -1058,7 +1222,7 @@ export function FileBrowser({
       </div>
 
         {selectedItems.length > 0 && (
-          <div className="absolute bottom-3 left-1/2 z-20 flex max-w-[calc(100%-24px)] -translate-x-1/2 animate-fade-up items-center gap-1 rounded-lg border border-edge bg-bg-panel/95 py-1 pl-3 pr-1 shadow-[0_12px_32px_-8px_rgba(4,10,20,0.8)] backdrop-blur-sm">
+          <div className="absolute inset-x-3 bottom-3 z-20 mx-auto flex w-fit max-w-full animate-fade-up items-center gap-1 rounded-lg border border-edge bg-bg-panel/95 py-1 pl-3 pr-1 shadow-[0_12px_32px_-8px_rgba(4,10,20,0.8)] backdrop-blur-sm">
             <span className="mr-2 min-w-0 shrink truncate font-mono text-[11px] text-ink-mid">
               <span className="text-ink-hi">{selectedItems.length} selected</span>
               {" · "}
@@ -1087,8 +1251,19 @@ export function FileBrowser({
                   title="Download the selection — folders with everything inside"
                 >
                   <Download size={13} />
-                  Download
+                  {!sideOpen && "Download"}
                 </button>
+                {peerConn && peer && (
+                  <button
+                    onClick={() => runPeerCopy("push", dragItems(selectedItems), peer.cwd)}
+                    disabled={busy || peerJob !== null}
+                    className={`${barBtn} min-w-0 !shrink`}
+                    title={`${conn.name} sends the selection straight to ${peerConn.name}, into its open folder`}
+                  >
+                    <ArrowLeftRight size={13} className="shrink-0" />
+                    <span className="truncate">Copy to {peerConn.name}</span>
+                  </button>
+                )}
                 <button
                   onClick={() => setAction({ kind: "chmod", items: selectedItems })}
                   disabled={busy}
@@ -1096,7 +1271,7 @@ export function FileBrowser({
                   title={isSftp ? "Change permissions (chmod)" : "Change permissions (SITE CHMOD)"}
                 >
                   <Lock size={13} />
-                  Permissions
+                  {!sideOpen && "Permissions"}
                 </button>
                 {isSftp && (
                   <button
@@ -1106,7 +1281,7 @@ export function FileBrowser({
                     title="Change owner and group (chown)"
                   >
                     <UserCog size={13} />
-                    Owner
+                    {!sideOpen && "Owner"}
                   </button>
                 )}
                 <button
@@ -1116,7 +1291,7 @@ export function FileBrowser({
                   title="Delete the selection (Del)"
                 >
                   <Trash2 size={13} />
-                  Delete
+                  {!sideOpen && "Delete"}
                 </button>
               </>
             )}
@@ -1132,7 +1307,10 @@ export function FileBrowser({
       </div>
       {transfer && (
         <div className="shrink-0 border-t border-edge bg-bg-panel">
-          <TransferBar transfer={transfer} />
+          <TransferBar
+            transfer={transfer}
+            onStop={peerJob ? () => peerCancel(peerJob).catch(() => {}) : undefined}
+          />
         </div>
       )}
 
