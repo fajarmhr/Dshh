@@ -28,12 +28,17 @@ browser.
 
 - **Multi-protocol tabs** — SSH, SFTP, FTP, Telnet, VNC and Serial from one window.
 - **VNC remote desktop** — the remote screen in a tab, with keyboard, mouse,
-  clipboard both ways, fit-to-tab or 1:1, view-only and Ctrl+Alt+Del. Logs in
-  with a VNC password, VeNCrypt (X509 TLS, username + password) or Apple
-  Remote Desktop for macOS Screen Sharing. **Route through** a saved SSH
-  session to tunnel the unencrypted VNC stream. **Type clipboard** keys text
-  in for consoles with no clipboard (BIOS, KVM, login prompts); on QEMU/KVM it
-  sends physical scancodes, so the guest's own keyboard layout applies.
+  clipboard both ways, fit-to-tab or 1:1, view-only and Ctrl+Alt+Del, or
+  **full screen** across the whole monitor (Ctrl+Alt+Enter, or the bar at the
+  top edge). Logs in with a VNC password, VeNCrypt (X509 TLS, username +
+  password) or Apple Remote Desktop for macOS Screen Sharing. **Route
+  through** a saved SSH session to tunnel the unencrypted VNC stream.
+  **Paste** opens your clipboard in an editable box first — nothing reaches
+  the machine until you type it (consoles with no clipboard: BIOS, KVM, login
+  prompts) or send it as its clipboard; on QEMU/KVM typing sends physical
+  scancodes, so the guest's own keyboard layout applies. **Copy text** reads
+  text off any part of the screen with Windows' built-in OCR, for consoles
+  that never share a clipboard — check and edit it, then copy.
 - **Cloud console links** — paste an OpenStack / Huawei FusionSphere
   `vnc_auto.html?token=…` link (the monitor button in the sidebar picks it up
   from the clipboard) and the VM's console opens in a tab: Dshh speaks the

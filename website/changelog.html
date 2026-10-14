@@ -52,7 +52,17 @@
            below are the static fallback shown when the API is unreachable. -->
       <div data-changelog>
       <div class="clog">
-        <div class="clog-v"><div style="display:flex;align-items:center;gap:8px;"><span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:#5b8cff;">v1.3.3</span><span style="border-radius:5px;background:rgba(62,207,142,0.1);padding:1px 7px;font-family:'JetBrains Mono',monospace;font-size:10px;color:#3ecf8e;">latest</span></div><div class="clog-d">oct 2026</div></div>
+        <div class="clog-v"><div style="display:flex;align-items:center;gap:8px;"><span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:#5b8cff;">v1.3.4</span><span style="border-radius:5px;background:rgba(62,207,142,0.1);padding:1px 7px;font-family:'JetBrains Mono',monospace;font-size:10px;color:#3ecf8e;">latest</span></div><div class="clog-d">oct 2026</div></div>
+        <div class="clog-body"><div class="clog-h">VNC full screen, and text in and out of consoles</div>
+          <ul class="clog-ul">
+            <li>Full screen: the VNC tab takes over the whole monitor. Ctrl+Alt+Enter goes back &mdash; it never reaches the VM &mdash; and touching the top edge slides down a bar with every control</li>
+            <li>Copy text: drag over any part of the remote screen and Dshh reads the text with Windows' built-in OCR, so you can copy from a BIOS, a Linux console or a login screen that has no clipboard. You check and edit what was read before it goes on your clipboard</li>
+            <li>Paste now opens your clipboard in an editable box first: fix it up, see how many Enters it will press and which characters a US keyboard can't type, then type it in or send it as the remote clipboard. Nothing leaves your PC on its own any more &mdash; clicking into the screen no longer pushes your clipboard to the machine</li>
+          </ul>
+        </div>
+      </div>
+      <div class="clog">
+        <div class="clog-v"><span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:#5b8cff;">v1.3.3</span><div class="clog-d">oct 2026</div></div>
         <div class="clog-body"><div class="clog-h">VNC consoles stay open, even untouched</div>
           <ul class="clog-ul">
             <li>Some console proxies hang up on a session nobody has used for a while, however much traffic it carries. A console left alone for a minute now gets its last mouse position sent again &mdash; nothing moves or clicks, but the proxy sees input</li>

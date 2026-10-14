@@ -154,6 +154,14 @@ export const vncType = (id: string, text: string) => invoke("vnc_type", { id, te
 /** Tell the backend a screen packet has been drawn, so it may ask for more. */
 export const vncAck = (id: string) => invoke("vnc_ack", { id });
 export const vncClose = (id: string) => invoke("vnc_close", { id });
+/**
+ * Read the text in an RGBA image with Windows' OCR. The pixels go over as a
+ * raw body (a JSON array of a screenful of bytes would be megabytes).
+ */
+export const ocrImage = (width: number, height: number, rgba: Uint8Array) =>
+  invoke<string>("ocr_image", rgba, {
+    headers: { "x-width": String(width), "x-height": String(height) },
+  });
 
 // ---- Remote file editing (SFTP download → local editor → auto re-upload) ----
 export async function editStart(

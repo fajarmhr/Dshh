@@ -7,6 +7,7 @@ mod ftp;
 mod local;
 mod localfs;
 mod logs;
+mod ocr;
 mod peer;
 mod portable;
 mod progress;
@@ -190,6 +191,7 @@ pub fn run() {
             vnc::vnc_type,
             vnc::vnc_ack,
             vnc::vnc_close,
+            ocr::ocr_image,
             edit::edit_start,
             edit::edit_stop,
             crypto::master_setup,

@@ -1,17 +1,23 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
-  ClipboardType,
+  ClipboardPaste,
   Eye,
   EyeOff,
+  Fullscreen,
   Maximize2,
   Minimize2,
   Power,
   RotateCw,
+  ScanText,
+  Shrink,
 } from "lucide-react";
 import { useStore } from "../store";
 import {
   clipboardRead,
   clipboardWrite,
+  ocrImage,
   vncAck,
   vncClipboard,
   vncClose,
@@ -25,10 +31,10 @@ import {
 import { CTRL_ALT_DEL, keyFromEvent, type VncKey } from "../lib/vncKeys";
 import { parseConsoleLink } from "../lib/consoleLink";
 import { PasswordPrompt } from "./PasswordPrompt";
-import { PasteConfirm } from "./PasteConfirm";
+import { VncCopyDialog, VncPasteDialog } from "./VncTextDialogs";
 import { ConsoleTokenPrompt } from "./ConsoleLinkModal";
 import type { Connection, Session } from "../lib/types";
-import { cn, formatDuration, isAuthFailure, splitPasteLines } from "../lib/utils";
+import { cn, formatDuration, isAuthFailure } from "../lib/utils";
 import { useSaveConnectionPref, wheelSteps } from "../lib/zoom";
 
 /** Ctrl+scroll zoom range and step (each notch is ×1.1). */
@@ -79,8 +85,10 @@ export function VncView({ session, conn }: { session: Session; conn: Connection 
   const moveRafRef = useRef(0);
   const wheelRef = useRef({ x: 0, y: 0 });
   const viewOnlyRef = useRef(false);
-  /** Last clipboard text exchanged either way, so it isn't echoed back. */
-  const lastClipRef = useRef<string | null>(null);
+  /** Keys whose release must not reach the remote (the full-screen combo's Enter). */
+  const swallowRef = useRef(new Set<string>());
+  /** Bumped per screen reading, so a stale one can't land in a newer dialog. */
+  const ocrSeqRef = useRef(0);
   /** Automatic console reconnects: the pending timer, retries used, last connect time. */
   const retryRef = useRef({ timer: 0, attempt: 0, since: 0 });
 
@@ -109,7 +117,21 @@ export function VncView({ session, conn }: { session: Session; conn: Connection 
   const [authError, setAuthError] = useState<string | null>(null);
   const [authBusy, setAuthBusy] = useState(false);
   const [tokenAsk, setTokenAsk] = useState<{ error?: string } | null>(null);
-  const [typePending, setTypePending] = useState<string | null>(null);
+  /** Text being reviewed before it goes to the remote; `null` when shut. */
+  const [pasteText, setPasteText] = useState<string | null>(null);
+  /** Text read off the screen; `text` is `null` while it's being read. */
+  const [ocr, setOcr] = useState<{ text: string | null; error?: string } | null>(null);
+  /** Dragging out an area of the screen to read, and the area so far (client px). */
+  const [selecting, setSelecting] = useState(false);
+  const [sel, setSel] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(
+    null
+  );
+  /** The window fills the monitor and this tab fills the window. */
+  const [full, setFull] = useState(false);
+  const fullRef = useRef(false);
+  fullRef.current = full;
+  /** Hold the full-screen bar open for a moment: on entry, or to show a note. */
+  const [barShown, setBarShown] = useState(false);
   const [connectedAt, setConnectedAt] = useState<number | null>(null);
   const [uptime, setUptime] = useState("");
   /** A dropped console is waiting to reconnect on its own. */
@@ -227,7 +249,6 @@ export function VncView({ session, conn }: { session: Session; conn: Connection 
         if (att.id) handleDrop(att.id, ev.reason);
         else att.closed = ev.reason;
       } else if (ev.kind === "clipboard") {
-        lastClipRef.current = ev.text;
         clipboardWrite(ev.text)
           .then(() => setNote("Remote clipboard copied"))
           .catch(() => {});
@@ -381,6 +402,7 @@ export function VncView({ session, conn }: { session: Session; conn: Connection 
     return () => {
       life.dead = true;
       window.clearTimeout(retryRef.current.timer);
+      if (fullRef.current) getCurrentWindow().setFullscreen(false).catch(() => {});
       canvas.removeEventListener("wheel", onWheel);
       cancelAnimationFrame(moveRafRef.current);
       if (backendId.current) {
@@ -452,6 +474,10 @@ export function VncView({ session, conn }: { session: Session; conn: Connection 
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
+    if (selecting) {
+      if (sel && e.buttons & 1) setSel({ ...sel, x1: e.clientX, y1: e.clientY });
+      return;
+    }
     posRef.current = toFb(e.clientX, e.clientY);
     // At most one motion event per frame; button changes go out immediately.
     if (!moveRafRef.current) {
@@ -466,18 +492,43 @@ export function VncView({ session, conn }: { session: Session; conn: Connection 
     e.preventDefault();
     e.currentTarget.focus();
     e.currentTarget.setPointerCapture(e.pointerId);
+    if (selecting) {
+      if (e.button === 0) setSel({ x0: e.clientX, y0: e.clientY, x1: e.clientX, y1: e.clientY });
+      else cancelSelect();
+      return;
+    }
     posRef.current = toFb(e.clientX, e.clientY);
     buttonsRef.current = rfbButtons(e.buttons);
     sendPointer();
   };
 
   const onPointerUp = (e: React.PointerEvent) => {
+    if (selecting) {
+      if (sel) readSelection({ ...sel, x1: e.clientX, y1: e.clientY });
+      return;
+    }
     posRef.current = toFb(e.clientX, e.clientY);
     buttonsRef.current = rfbButtons(e.buttons);
     sendPointer();
   };
 
   const onKeyDown = (e: React.KeyboardEvent) => {
+    // Ctrl+Alt+Enter toggles full screen and never reaches the remote. Ctrl
+    // and Alt went down there already, so they're let go of first.
+    if (e.ctrlKey && e.altKey && e.key === "Enter") {
+      e.preventDefault();
+      e.stopPropagation();
+      swallowRef.current.add(e.code);
+      releaseAll();
+      toggleFull();
+      return;
+    }
+    if (selecting) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.key === "Escape") cancelSelect();
+      return;
+    }
     const id = backendId.current;
     if (!id || viewOnly) return;
     // Everything goes to the remote — Tab, F5, Ctrl+W included — and nothing
@@ -491,6 +542,11 @@ export function VncView({ session, conn }: { session: Session; conn: Connection 
   };
 
   const onKeyUp = (e: React.KeyboardEvent) => {
+    if (swallowRef.current.delete(e.code) || selecting) {
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
     const id = backendId.current;
     if (!id || viewOnly) return;
     e.preventDefault();
@@ -516,23 +572,6 @@ export function VncView({ session, conn }: { session: Session; conn: Connection 
     pressedRef.current.clear();
   };
 
-  // Local clipboard → server when the screen takes focus, the way desktop
-  // VNC viewers sync it. Consoles without a clipboard ignore it; for those
-  // there is "Type clipboard".
-  const onFocus = async () => {
-    const id = backendId.current;
-    if (!id || viewOnlyRef.current) return;
-    try {
-      const text = await clipboardRead();
-      if (text && text !== lastClipRef.current) {
-        lastClipRef.current = text;
-        vncClipboard(id, text).catch(() => {});
-      }
-    } catch {
-      /* clipboard unavailable — nothing to sync */
-    }
-  };
-
   const sendCtrlAltDel = () => {
     const id = backendId.current;
     if (!id) return;
@@ -553,27 +592,120 @@ export function VncView({ session, conn }: { session: Session; conn: Connection 
     canvasRef.current?.focus();
   };
 
-  /** Type the local clipboard as keystrokes — for consoles with no clipboard. */
-  const typeClipboard = async () => {
-    if (!backendId.current) return;
+  /**
+   * Open the review box, prefilled with the local clipboard. Nothing reaches
+   * the remote until it's sent from there — typed, or as its clipboard.
+   */
+  const openPaste = async () => {
     let text = "";
     try {
       text = await clipboardRead();
-    } catch (e) {
-      setNote(`Clipboard unavailable: ${String(e)}`);
-      return;
+    } catch {
+      /* clipboard unavailable — start empty */
     }
-    if (!text) {
-      setNote("Clipboard is empty");
-      return;
-    }
-    // Each newline is an Enter on the remote, same footgun as a terminal paste.
-    if (settings.pasteWarnMultiline && splitPasteLines(text).length > 1) {
-      setTypePending(text);
-      return;
-    }
-    startTyping(text);
+    releaseAll();
+    setPasteText(text);
   };
+
+  const closePaste = () => {
+    setPasteText(null);
+    canvasRef.current?.focus();
+  };
+
+  const sendAsClipboard = (text: string) => {
+    closePaste();
+    const id = backendId.current;
+    if (!id) return;
+    vncClipboard(id, text)
+      .then(() => setNote("Sent to the remote clipboard"))
+      .catch((e) => setNote(String(e)));
+  };
+
+  /** Drag out an area of the screen to read its text: consoles rarely share a clipboard. */
+  const startSelect = () => {
+    releaseAll();
+    setSel(null);
+    setSelecting(true);
+    canvasRef.current?.focus();
+  };
+
+  const cancelSelect = () => {
+    setSelecting(false);
+    setSel(null);
+  };
+
+  /** Read the text inside a dragged-out area, given in client coordinates. */
+  const readSelection = (r: { x0: number; y0: number; x1: number; y1: number }) => {
+    cancelSelect();
+    const a = toFb(Math.min(r.x0, r.x1), Math.min(r.y0, r.y1));
+    const b = toFb(Math.max(r.x0, r.x1), Math.max(r.y0, r.y1));
+    const w = b.x - a.x + 1;
+    const h = b.y - a.y + 1;
+    const ctx = ctxRef.current;
+    if (!ctx || w < 4 || h < 4) {
+      setNote("Drag over the text to copy");
+      return;
+    }
+    const pixels = ctx.getImageData(a.x, a.y, w, h).data;
+    const seq = ++ocrSeqRef.current;
+    setOcr({ text: null });
+    canvasRef.current?.blur();
+    ocrImage(w, h, new Uint8Array(pixels.buffer))
+      .then((text) => seq === ocrSeqRef.current && setOcr({ text }))
+      .catch((e) => seq === ocrSeqRef.current && setOcr({ text: null, error: String(e) }));
+  };
+
+  const closeOcr = () => {
+    ocrSeqRef.current++;
+    setOcr(null);
+    canvasRef.current?.focus();
+  };
+
+  const copyText = (text: string) => {
+    closeOcr();
+    clipboardWrite(text)
+      .then(() => setNote("Copied to your clipboard"))
+      .catch((e) => setNote(`Copy failed: ${String(e)}`));
+  };
+
+  const toggleFull = (on = !fullRef.current) => {
+    getCurrentWindow()
+      .setFullscreen(on)
+      .catch((e) => setNote(`Full screen failed: ${String(e)}`));
+    setFull(on);
+    setBarShown(on);
+    // A leftover note would take the place of the exit hint on the bar.
+    if (on) setNote("");
+    requestAnimationFrame(() => canvasRef.current?.focus());
+  };
+
+  // Keys pressed outside the screen (on the full-screen bar, say) never
+  // reach its handler, so the combo and Esc are caught here as well.
+  useEffect(() => {
+    if (!full && !selecting) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (selecting && e.key === "Escape") cancelSelect();
+      else if (full && e.ctrlKey && e.altKey && e.key === "Enter") {
+        e.preventDefault();
+        toggleFull(false);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [full, selecting]);
+
+  // In full screen the toolbar's note is out of sight, so a new one opens
+  // the bar for a moment instead.
+  useEffect(() => {
+    if (full && note) setBarShown(true);
+  }, [full, note]);
+
+  useEffect(() => {
+    if (!barShown) return;
+    const t = window.setTimeout(() => setBarShown(false), 2500);
+    return () => window.clearTimeout(t);
+  }, [barShown, note]);
 
   const reconnect = () => {
     if (connectingRef.current) return;
@@ -624,83 +756,134 @@ export function VncView({ session, conn }: { session: Session; conn: Connection 
   const toolBtn =
     "flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-ink-mid transition hover:bg-bg-hover hover:text-ink-hi active:scale-[0.97] disabled:pointer-events-none disabled:opacity-30";
 
-  return (
-    <div className="relative flex h-full w-full flex-col bg-bg-base effect-base">
-      <div
-        className="flex h-9 shrink-0 items-center gap-2 border-b border-edge bg-bg-panel effect-surface px-2"
-        style={
-          tint
-            ? { borderBottomColor: `${tint}59`, boxShadow: `inset 3px 0 0 ${tint}` }
-            : undefined
+  // The same controls sit in the toolbar and on the full-screen bar.
+  const actions = (
+    <>
+      <button
+        onClick={sendCtrlAltDel}
+        disabled={!connected || viewOnly}
+        className={toolBtn}
+        title="Send Ctrl+Alt+Del to the remote machine"
+      >
+        <Power size={14} />
+        Ctrl+Alt+Del
+      </button>
+      <button
+        onClick={openPaste}
+        disabled={!connected || viewOnly}
+        className={toolBtn}
+        title="Review and edit text — your clipboard to start with — then type it into the remote machine"
+      >
+        <ClipboardPaste size={14} />
+        Paste
+      </button>
+      <button
+        onClick={selecting ? cancelSelect : startSelect}
+        disabled={!fb.w}
+        className={cn(toolBtn, selecting && "bg-accent/15 text-accent hover:text-accent")}
+        title="Copy text off the screen: drag over it, check what was read, then copy it to your clipboard"
+      >
+        <ScanText size={14} />
+        Copy text
+      </button>
+      <div className="mx-1 h-4 w-px bg-edge" />
+      <button
+        onClick={toggleFit}
+        className={toolBtn}
+        title={
+          fit
+            ? "Scaled to fit · click for actual size · Ctrl+scroll to zoom"
+            : "Zoomed · click to fit · Ctrl+scroll to zoom"
         }
       >
-        <span className={`ml-1 h-1.5 w-1.5 shrink-0 rounded-full ${statusColor}`} />
-        <span
-          className="shrink-0 font-mono text-[10.5px] text-ink-dim"
-          style={tint ? { color: tint } : undefined}
-        >
-          {target}
-        </span>
-        {note && (
-          <span className="min-w-0 flex-1 truncate font-mono text-[10.5px] text-ink-dim">
-            {note}
-          </span>
-        )}
-        <div className="ml-auto flex shrink-0 items-center gap-1">
-          <button
-            onClick={sendCtrlAltDel}
-            disabled={!connected || viewOnly}
-            className={toolBtn}
-            title="Send Ctrl+Alt+Del to the remote machine"
-          >
-            <Power size={14} />
-            Ctrl+Alt+Del
-          </button>
-          <button
-            onClick={typeClipboard}
-            disabled={!connected || viewOnly}
-            className={toolBtn}
-            title="Type the clipboard as keystrokes — for consoles that have no clipboard (BIOS, KVM, login prompts). US keyboard layout."
-          >
-            <ClipboardType size={14} />
-            Type clipboard
-          </button>
-          <div className="mx-1 h-4 w-px bg-edge" />
-          <button
-            onClick={toggleFit}
-            className={toolBtn}
-            title={
-              fit
-                ? "Scaled to fit · click for actual size · Ctrl+scroll to zoom"
-                : "Zoomed · click to fit the tab · Ctrl+scroll to zoom"
-            }
-          >
-            {fit ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
-            {fit ? "Fit" : `${Math.round(scale * 100)}%`}
-          </button>
-          <button
-            onClick={toggleViewOnly}
-            className={cn(
-              toolBtn,
-              viewOnly && "bg-warn/15 text-warn hover:bg-warn/25 hover:text-warn"
-            )}
-            title={
-              viewOnly
-                ? "View only: keyboard and mouse are not sent. Click to take control."
-                : "Watch without sending keyboard or mouse input"
-            }
-          >
-            {viewOnly ? <EyeOff size={14} /> : <Eye size={14} />}
-            {viewOnly ? "View only" : "Control"}
-          </button>
-        </div>
-      </div>
+        {fit ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+        {fit ? "Fit" : `${Math.round(scale * 100)}%`}
+      </button>
+      <button
+        onClick={toggleViewOnly}
+        className={cn(toolBtn, viewOnly && "bg-warn/15 text-warn hover:bg-warn/25 hover:text-warn")}
+        title={
+          viewOnly
+            ? "View only: keyboard and mouse are not sent. Click to take control."
+            : "Watch without sending keyboard or mouse input"
+        }
+      >
+        {viewOnly ? <EyeOff size={14} /> : <Eye size={14} />}
+        {viewOnly ? "View only" : "Control"}
+      </button>
+      <button
+        onClick={() => toggleFull()}
+        className={toolBtn}
+        title={full ? "Leave full screen (Ctrl+Alt+Enter)" : "Full screen (Ctrl+Alt+Enter)"}
+      >
+        {full ? <Shrink size={14} /> : <Fullscreen size={14} />}
+        {full && "Exit"}
+      </button>
+    </>
+  );
 
-      <div className="min-h-0 flex-1 p-2">
+  return (
+    <div
+      className={cn(
+        "flex flex-col",
+        full ? "fixed inset-0 z-[70] bg-black" : "relative h-full w-full bg-bg-base effect-base"
+      )}
+    >
+      {!full && (
+        <div
+          className="flex h-9 shrink-0 items-center gap-2 border-b border-edge bg-bg-panel effect-surface px-2"
+          style={
+            tint
+              ? { borderBottomColor: `${tint}59`, boxShadow: `inset 3px 0 0 ${tint}` }
+              : undefined
+          }
+        >
+          <span className={`ml-1 h-1.5 w-1.5 shrink-0 rounded-full ${statusColor}`} />
+          <span
+            className="shrink-0 font-mono text-[10.5px] text-ink-dim"
+            style={tint ? { color: tint } : undefined}
+          >
+            {target}
+          </span>
+          {note && (
+            <span className="min-w-0 flex-1 truncate font-mono text-[10.5px] text-ink-dim">
+              {note}
+            </span>
+          )}
+          <div className="ml-auto flex shrink-0 items-center gap-1">{actions}</div>
+        </div>
+      )}
+
+      {full && (
+        // A thin strip along the top edge; touching it slides the bar down.
+        // Only the strip and the bar take the pointer, so the rest of the
+        // screen's top stays clickable.
+        <div className="group pointer-events-none absolute inset-x-0 top-0 z-20 flex justify-center">
+          <div className="pointer-events-auto absolute inset-x-0 top-0 h-1" />
+          <div
+            className={cn(
+              "pointer-events-auto relative mt-1 flex items-center gap-1 rounded-lg border border-edge bg-bg-panel/95 py-1 pl-3 pr-1 shadow-[0_12px_32px_-8px_rgba(0,0,0,0.9)] backdrop-blur-sm transition-transform duration-150",
+              barShown ? "translate-y-0" : "-translate-y-[calc(100%+8px)] group-hover:translate-y-0"
+            )}
+          >
+            <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${statusColor}`} />
+            <span className="ml-1 shrink-0 font-mono text-[10.5px] text-ink-dim">{target}</span>
+            <span className="ml-2 max-w-[280px] truncate font-mono text-[10.5px] text-ink-mid">
+              {note || "Ctrl+Alt+Enter leaves full screen"}
+            </span>
+            <div className="mx-1 h-4 w-px bg-edge" />
+            {actions}
+          </div>
+        </div>
+      )}
+
+      <div className={cn("min-h-0 flex-1", !full && "p-2")}>
         <div
           ref={wrapRef}
           className={cn(
-            "flex h-full w-full rounded-lg border border-edge bg-bg-inset transition-colors focus-within:border-accent/50",
+            "flex h-full w-full",
+            !full &&
+              "rounded-lg border border-edge bg-bg-inset transition-colors focus-within:border-accent/50",
             fit ? "overflow-hidden" : "overflow-auto"
           )}
         >
@@ -711,12 +894,11 @@ export function VncView({ session, conn }: { session: Session; conn: Connection 
             style={{
               width: fb.w * scale,
               height: fb.h * scale,
-              cursor: viewOnly ? "default" : cursor,
+              cursor: selecting ? "crosshair" : viewOnly ? "default" : cursor,
             }}
             onKeyDown={onKeyDown}
             onKeyUp={onKeyUp}
             onBlur={releaseAll}
-            onFocus={onFocus}
             onPointerDown={onPointerDown}
             onPointerUp={onPointerUp}
             onPointerMove={onPointerMove}
@@ -734,7 +916,7 @@ export function VncView({ session, conn }: { session: Session; conn: Connection 
         </div>
       </div>
 
-      {settings.statusBar && (
+      {settings.statusBar && !full && (
         <div
           className="flex h-6 shrink-0 items-center gap-3 border-t border-edge bg-bg-panel effect-surface px-3 font-mono text-[10px] text-ink-dim"
           style={tint ? { borderTopColor: `${tint}66` } : undefined}
@@ -785,18 +967,50 @@ export function VncView({ session, conn }: { session: Session; conn: Connection 
         </div>
       )}
 
-      {typePending !== null && (
-        <PasteConfirm
-          lines={splitPasteLines(typePending)}
-          onConfirm={() => {
-            const text = typePending;
-            setTypePending(null);
+      {selecting &&
+        createPortal(
+          <>
+            <div className="pointer-events-none fixed left-1/2 top-3 z-[80] -translate-x-1/2 animate-fade-up rounded-lg border border-accent/40 bg-bg-panel/95 px-3 py-1.5 font-mono text-[11px] text-ink-mid shadow-[0_12px_32px_-8px_rgba(4,10,20,0.8)] backdrop-blur-sm">
+              Drag over the text to copy · Esc cancels
+            </div>
+            {sel && (
+              <div
+                className="pointer-events-none fixed z-[80] border border-accent bg-accent/15"
+                style={{
+                  left: Math.min(sel.x0, sel.x1),
+                  top: Math.min(sel.y0, sel.y1),
+                  width: Math.abs(sel.x1 - sel.x0),
+                  height: Math.abs(sel.y1 - sel.y0),
+                }}
+              />
+            )}
+          </>,
+          document.body
+        )}
+
+      {pasteText !== null && (
+        <VncPasteDialog
+          initial={pasteText}
+          target={conn.name}
+          onType={(text) => {
+            closePaste();
             startTyping(text);
           }}
-          onCancel={() => {
-            setTypePending(null);
-            canvasRef.current?.focus();
+          onSendClipboard={sendAsClipboard}
+          onCancel={closePaste}
+        />
+      )}
+
+      {ocr && (
+        <VncCopyDialog
+          text={ocr.text}
+          error={ocr.error}
+          onCopy={copyText}
+          onReselect={() => {
+            closeOcr();
+            startSelect();
           }}
+          onCancel={closeOcr}
         />
       )}
 
