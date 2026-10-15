@@ -172,7 +172,7 @@ const TOPICS: Topic[] = [
     what: "A remote machine's screen in a tab, with keyboard, mouse and clipboard.",
     how: [
       <>Add a connection with protocol <b>VNC</b>: host, port (5900) and the VNC password. <b>Route through</b> a saved SSH session to tunnel it.</>,
-      <><b>Fit</b> scales the screen to the tab; click for 1:1, or <Key>Ctrl</Key>+scroll to zoom.</>,
+      <><b>Fit</b> scales the screen to the tab; click it for actual size (1:1). <Key>Ctrl</Key>+scroll goes to the machine, for its own zoom.</>,
       <><b>View only</b> watches without sending keys or mouse; <b>Ctrl+Alt+Del</b> sends that combination to the machine.</>,
       "While the screen has focus every key goes to the remote machine — Tab, F5, Windows shortcuts included.",
     ],
@@ -225,7 +225,7 @@ const SHORTCUTS: [string, string][] = [
   ["Ctrl+Shift+P", "Filter saved sessions"],
   ["Ctrl+K", "Compose a command in the bottom bar"],
   ["Ctrl+F", "Search the terminal's scrollback"],
-  ["Ctrl + scroll", "Zoom the terminal, file list or VNC screen"],
+  ["Ctrl + scroll", "Zoom the terminal or file list (on a VNC screen it goes to the machine)"],
   ["Ctrl+0", "Reset the zoom"],
   ["Ctrl+A", "Select every file in the folder"],
   ["Del", "Delete the selected files"],

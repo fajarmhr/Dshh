@@ -148,6 +148,18 @@ export const vncKey = (id: string, keysym: number, code: number, down: boolean) 
   invoke("vnc_key", { id, keysym, code, down });
 export const vncPointer = (id: string, x: number, y: number, buttons: number) =>
   invoke("vnc_pointer", { id, x, y, buttons });
+/**
+ * Wheel clicks (8 up, 16 down, 32 left, 64 right) at one spot, Ctrl held
+ * around them if `ctrl` — in one call, so nothing lands out of order.
+ */
+export const vncWheel = (
+  id: string,
+  x: number,
+  y: number,
+  buttons: number,
+  clicks: number[],
+  ctrl: boolean
+) => invoke("vnc_wheel", { id, x, y, buttons, clicks, ctrl });
 export const vncClipboard = (id: string, text: string) => invoke("vnc_clipboard", { id, text });
 /** Type text as key presses (for consoles without a clipboard). */
 export const vncType = (id: string, text: string) => invoke("vnc_type", { id, text });

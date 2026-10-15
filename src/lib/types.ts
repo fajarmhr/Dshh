@@ -83,7 +83,7 @@ export interface Connection {
   fontSize?: number;
   /** File browser zoom (1 = 100%), set with Ctrl+scroll over the list. */
   fileZoom?: number;
-  /** VNC screen scale set with Ctrl+scroll; absent means fit to the tab. */
+  /** VNC screen scale set with the Fit / 1:1 button; absent means fit to the tab. */
   vncScale?: number;
   /**
    * Where this server reaches others for a server-to-server copy, by their

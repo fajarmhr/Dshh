@@ -52,7 +52,16 @@
            below are the static fallback shown when the API is unreachable. -->
       <div data-changelog>
       <div class="clog">
-        <div class="clog-v"><div style="display:flex;align-items:center;gap:8px;"><span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:#5b8cff;">v1.3.5</span><span style="border-radius:5px;background:rgba(62,207,142,0.1);padding:1px 7px;font-family:'JetBrains Mono',monospace;font-size:10px;color:#3ecf8e;">latest</span></div><div class="clog-d">oct 2026</div></div>
+        <div class="clog-v"><div style="display:flex;align-items:center;gap:8px;"><span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:#5b8cff;">v1.3.6</span><span style="border-radius:5px;background:rgba(62,207,142,0.1);padding:1px 7px;font-family:'JetBrains Mono',monospace;font-size:10px;color:#3ecf8e;">latest</span></div><div class="clog-d">oct 2026</div></div>
+        <div class="clog-body"><div class="clog-h">Ctrl+scroll goes to the VNC machine</div>
+          <ul class="clog-ul">
+            <li>On a VNC screen, Ctrl+scroll now goes to the remote machine, so its own zoom works &mdash; even when you haven't clicked into the screen first. The Fit button switches between fit-to-tab and actual size</li>
+            <li>A scroll on a VNC screen reaches the machine in one piece, so a held Ctrl can no longer land after the wheel</li>
+          </ul>
+        </div>
+      </div>
+      <div class="clog">
+        <div class="clog-v"><div style="display:flex;align-items:center;gap:8px;"><span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:#5b8cff;">v1.3.5</span></div><div class="clog-d">oct 2026</div></div>
         <div class="clog-body"><div class="clog-h">VNC copy text keeps tables in rows</div>
           <ul class="clog-ul">
             <li>Copy text on VNC lays the text out as the screen shows it: a table comes back row by row with its columns lined up, instead of one column after another, and blank lines stay where they were. A zero read as the letter O inside a number (73/O/8) is put back</li>

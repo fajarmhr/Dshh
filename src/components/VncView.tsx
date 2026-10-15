@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   ClipboardPaste,
@@ -22,6 +22,7 @@ import {
   vncKey,
   vncPointer,
   vncType,
+  vncWheel,
   type VncEvent,
   type VncHello,
 } from "../lib/api";
@@ -33,12 +34,8 @@ import { revealChrome, useFullScreen } from "../lib/fullscreen";
 import { ConsoleTokenPrompt } from "./ConsoleLinkModal";
 import type { Connection, Session } from "../lib/types";
 import { cn, formatDuration, isAuthFailure } from "../lib/utils";
-import { useSaveConnectionPref, wheelSteps } from "../lib/zoom";
+import { useSaveConnectionPref } from "../lib/zoom";
 
-/** Ctrl+scroll zoom range and step (each notch is ×1.1). */
-const SCALE_MIN = 0.1;
-const SCALE_MAX = 4;
-const SCALE_STEP = 1.1;
 /** Wheel travel (px) per scroll click sent to the server: one mouse notch. */
 const WHEEL_STEP = 100;
 /**
@@ -95,18 +92,14 @@ export function VncView({ session, conn }: { session: Session; conn: Connection 
   const [fb, setFb] = useState({ w: 0, h: 0 });
   const [hello, setHello] = useState<VncHello | null>(null);
   /**
-   * Zoom set with Ctrl+scroll or the 1:1 button, remembered on the
-   * connection; `null` scales the screen to fit the tab.
+   * Zoom set with the Fit / 1:1 button, remembered on the connection; `null`
+   * scales the screen to fit the tab. Ctrl+scroll is the remote's, not this.
    */
   const [manualScale, setManualScale] = useState<number | null>(conn.vncScale ?? null);
   const fit = manualScale === null;
   const saveScale = useSaveConnectionPref(conn.id);
   const [fitScale, setFitScale] = useState(1);
   const scale = manualScale ?? fitScale;
-  const scaleRef = useRef(scale);
-  scaleRef.current = scale;
-  /** Framebuffer point to keep under the pointer across a wheel zoom. */
-  const anchorRef = useRef<{ fx: number; fy: number; cx: number; cy: number } | null>(null);
   const [viewOnly, setViewOnly] = useState(false);
   const [cursor, setCursor] = useState("default");
   const [note, setNote] = useState("");
@@ -357,40 +350,27 @@ export function VncView({ session, conn }: { session: Session; conn: Connection 
     ctxRef.current = canvas.getContext("2d", { alpha: false });
 
     // Native listener: React's wheel handler is passive, so it can't stop the
-    // page scrolling.
-    const zoomAcc = { v: 0 };
+    // page scrolling (or, with Ctrl, the window zooming).
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
-      if (e.ctrlKey) {
-        const steps = wheelSteps(zoomAcc, e);
-        if (!steps || !fbRef.current.w) return;
-        const r = canvas.getBoundingClientRect();
-        anchorRef.current = {
-          fx: (e.clientX - r.left) / scaleRef.current,
-          fy: (e.clientY - r.top) / scaleRef.current,
-          cx: e.clientX,
-          cy: e.clientY,
-        };
-        setZoomRef.current(scaleRef.current * SCALE_STEP ** steps);
-        return;
-      }
       const id = backendId.current;
       if (!id || viewOnlyRef.current) return;
       const unit = e.deltaMode === 1 ? 40 : e.deltaMode === 2 ? 800 : 1;
       const acc = wheelRef.current;
       acc.x += e.deltaX * unit;
       acc.y += e.deltaY * unit;
+      const clicks: number[] = [];
+      for (; acc.y <= -WHEEL_STEP; acc.y += WHEEL_STEP) clicks.push(8);
+      for (; acc.y >= WHEEL_STEP; acc.y -= WHEEL_STEP) clicks.push(16);
+      for (; acc.x <= -WHEEL_STEP; acc.x += WHEEL_STEP) clicks.push(32);
+      for (; acc.x >= WHEEL_STEP; acc.x -= WHEEL_STEP) clicks.push(64);
+      if (!clicks.length) return;
+      // Ctrl+scroll is the remote's own zoom. When the screen hadn't focus,
+      // the machine never saw Ctrl go down, so it's held there for the scroll.
+      const pressed = pressedRef.current;
+      const holdCtrl = e.ctrlKey && !pressed.has("ControlLeft") && !pressed.has("ControlRight");
       const { x, y } = toFb(e.clientX, e.clientY);
-      const b = buttonsRef.current;
-      // Each scroll step is a press and release of a wheel "button".
-      const click = (bit: number) => {
-        vncPointer(id, x, y, b | bit).catch(() => {});
-        vncPointer(id, x, y, b).catch(() => {});
-      };
-      for (; acc.y <= -WHEEL_STEP; acc.y += WHEEL_STEP) click(8);
-      for (; acc.y >= WHEEL_STEP; acc.y -= WHEEL_STEP) click(16);
-      for (; acc.x <= -WHEEL_STEP; acc.x += WHEEL_STEP) click(32);
-      for (; acc.x >= WHEEL_STEP; acc.x -= WHEEL_STEP) click(64);
+      vncWheel(id, x, y, buttonsRef.current, clicks, holdCtrl).catch(() => {});
     };
     canvas.addEventListener("wheel", onWheel, { passive: false });
 
@@ -427,27 +407,10 @@ export function VncView({ session, conn }: { session: Session; conn: Connection 
   }, [fb]);
 
   /** Set a manual zoom (null = fit) and remember it on the connection. */
-  const setZoom = (next: number | null) => {
-    const value =
-      next === null ? null : Math.min(SCALE_MAX, Math.max(SCALE_MIN, Math.round(next * 100) / 100));
+  const setZoom = (value: number | null) => {
     setManualScale(value);
     saveScale({ vncScale: value ?? undefined });
   };
-  const setZoomRef = useRef(setZoom);
-  setZoomRef.current = setZoom;
-
-  // Keep the point that was under the pointer there after a wheel zoom, by
-  // scrolling the pane once the new size has laid out.
-  useLayoutEffect(() => {
-    const a = anchorRef.current;
-    const canvas = canvasRef.current;
-    const wrap = wrapRef.current;
-    anchorRef.current = null;
-    if (!a || !canvas || !wrap) return;
-    const r = canvas.getBoundingClientRect();
-    wrap.scrollLeft += r.left + a.fx * scale - a.cx;
-    wrap.scrollTop += r.top + a.fy * scale - a.cy;
-  }, [scale]);
 
   /** Fit ↔ the zoom in use; from Fit it goes to 1:1. */
   const toggleFit = () => setZoom(fit ? 1 : null);
@@ -770,9 +733,7 @@ export function VncView({ session, conn }: { session: Session; conn: Connection 
         onClick={toggleFit}
         className={toolBtn}
         title={
-          fit
-            ? "Scaled to fit · click for actual size · Ctrl+scroll to zoom"
-            : "Zoomed · click to fit · Ctrl+scroll to zoom"
+          fit ? "Scaled to fit · click for actual size" : "Actual size · click to fit"
         }
       >
         {fit ? <Minimize2 size={14} /> : <Maximize2 size={14} />}

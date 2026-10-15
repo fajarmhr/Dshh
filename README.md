@@ -110,8 +110,9 @@ browser.
   grid or octal, optionally into folders, which keep their execute bit) or, over
   SFTP, change **owner and group** by name. FTP permissions go through
   `SITE CHMOD`. A `perms` column shows each entry's rights.
-- **Ctrl+scroll zoom** — the terminal font, the file list and the VNC screen,
-  each remembered per connection; Ctrl+0 (or the zoom indicator) resets.
+- **Ctrl+scroll zoom** — the terminal font and the file list, each
+  remembered per connection; Ctrl+0 (or the zoom indicator) resets. On a VNC
+  screen Ctrl+scroll goes to the machine; the Fit button switches to 1:1.
 - **Port forwarding, all three directions** — local (`ssh -L`), remote
   (`ssh -R`, the server listens for you) and dynamic (`ssh -D`, a built-in
   SOCKS5 proxy). Each forward runs on its own SSH connection and shows live

@@ -187,6 +187,7 @@ pub fn run() {
             vnc::vnc_connect,
             vnc::vnc_key,
             vnc::vnc_pointer,
+            vnc::vnc_wheel,
             vnc::vnc_clipboard,
             vnc::vnc_type,
             vnc::vnc_ack,

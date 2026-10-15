@@ -94,6 +94,7 @@ impl Drop for VncSession {
     }
 }
 
+#[derive(Debug, PartialEq)]
 enum VncCmd {
     /// `code` is an XT scancode (0xE0-prefixed when extended), 0 if unknown.
     Key { keysym: u32, code: u32, down: bool },
@@ -690,7 +691,9 @@ async fn read_cut_text(rd: &mut Reader) -> Result<Option<String>, String> {
 // The input commands are deliberately synchronous: Tauri runs those on the
 // main thread in the order they were invoked, whereas async commands race on
 // the runtime's worker threads — and a key-up overtaking its key-down leaves
-// the remote with a stuck key.
+// the remote with a stuck key. Even so, invokes fired back to back can arrive
+// out of order (a Ctrl+scroll's Ctrl landed after its wheel clicks), so input
+// that must stay together goes over in one call, as vnc_wheel does.
 
 fn send(state: &State<'_, AppState>, id: &str, cmd: VncCmd) {
     if let Some(s) = state.vnc.blocking_lock().get(id) {
@@ -706,6 +709,43 @@ pub fn vnc_key(id: String, keysym: u32, code: u32, down: bool, state: State<'_, 
 #[tauri::command]
 pub fn vnc_pointer(id: String, x: u16, y: u16, buttons: u8, state: State<'_, AppState>) {
     send(&state, &id, VncCmd::Pointer { x, y, buttons });
+}
+
+/// A turn of the mouse wheel at one spot: each click a press and release of
+/// its wheel "button" (8 up, 16 down, 32 left, 64 right) on top of the
+/// buttons held. With `ctrl`, Ctrl is held around the clicks — the remote's
+/// own Ctrl+scroll zoom, for a screen that never saw Ctrl go down.
+#[tauri::command]
+pub fn vnc_wheel(
+    id: String,
+    x: u16,
+    y: u16,
+    buttons: u8,
+    clicks: Vec<u8>,
+    ctrl: bool,
+    state: State<'_, AppState>,
+) {
+    if let Some(s) = state.vnc.blocking_lock().get(&id) {
+        for cmd in wheel_cmds(x, y, buttons, &clicks, ctrl) {
+            let _ = s.tx.send(cmd);
+        }
+    }
+}
+
+fn wheel_cmds(x: u16, y: u16, buttons: u8, clicks: &[u8], ctrl: bool) -> Vec<VncCmd> {
+    let ctrl_key = |down| VncCmd::Key { keysym: keys::CTRL_KEYSYM, code: keys::CTRL_SCANCODE, down };
+    let mut cmds = Vec::with_capacity(clicks.len() * 2 + 2);
+    if ctrl {
+        cmds.push(ctrl_key(true));
+    }
+    for &bit in clicks {
+        cmds.push(VncCmd::Pointer { x, y, buttons: buttons | bit });
+        cmds.push(VncCmd::Pointer { x, y, buttons });
+    }
+    if ctrl {
+        cmds.push(ctrl_key(false));
+    }
+    cmds
 }
 
 #[tauri::command]
@@ -1020,6 +1060,17 @@ mod tests {
         let pointed = Instant::now();
         assert_eq!(next_nudge(&mut server, &tx).await, pointer_event(10, 20, 0));
         assert!(pointed.elapsed() >= NUDGE_AFTER, "{:?}", pointed.elapsed());
+    }
+
+    #[test]
+    fn a_ctrl_scroll_holds_ctrl_around_its_clicks() {
+        let ctrl = |down| VncCmd::Key { keysym: 0xffe3, code: 0x1d, down };
+        let at = |buttons| VncCmd::Pointer { x: 5, y: 6, buttons };
+        assert_eq!(
+            wheel_cmds(5, 6, 1, &[8, 8], true),
+            vec![ctrl(true), at(9), at(1), at(9), at(1), ctrl(false)]
+        );
+        assert_eq!(wheel_cmds(5, 6, 0, &[16], false), vec![at(16), at(0)]);
     }
 
     #[test]
